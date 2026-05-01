@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 460" role="img">
+  <title>XOArena</title>
+  <!-- XO prominence; ARENA secondary typographic line -->
+  <g transform="translate(260.00,186.00) scale(0.8920) translate(-298.35,-273.72)">
+    <g transform="translate(0 -12.0)" fill="none" stroke="#8C6A4A" stroke-width="13.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M148.9,157.9C209.9,297.9 231.9,379.9 279.9,389.9"/>
+        <path d="M157.9,389.9C239.9,297.9 297.9,239.9 394.9,297.9"/>
+        <path d="M426.0,353.2C422.1,355.7 412.7,363.5 404.1,367.0C395.6,370.5 387.5,372.4 378.0,372.9C368.5,373.5 360.1,372.7 350.8,370.3C341.5,367.9 333.8,364.5 325.9,359.4C317.9,354.2 311.8,348.7 306.1,341.5C300.4,334.3 296.7,327.3 294.0,318.8C291.3,310.4 290.3,302.8 290.9,294.1C291.5,285.5 293.5,278.1 297.3,270.3C301.1,262.6 303.5,257.1 312.4,250.4C321.2,243.6 336.0,236.0 347.0,232.6C358.0,229.1 364.5,230.0 374.1,230.9C383.6,231.8 391.8,234.0 400.5,237.8C409.3,241.6 416.3,246.2 423.2,252.4C430.2,258.7 435.2,265.1 439.4,273.0C443.7,280.9 446.1,288.4 447.1,297.0C448.2,305.7 445.7,317.3 445.4,321.7"/>
+      </g>
+  </g>
+  <text x="260.0" y="394"
+      text-anchor="middle"
+      font-family="SF Pro Display, SF Pro Text, Inter, ui-sans-serif, system-ui, sans-serif"
+      font-weight="400"
+      font-size="56"
+      opacity="0.88"
+      fill="#2B2926"
+      style="letter-spacing: 0.22em;">ARENA</text>
+
+</svg>

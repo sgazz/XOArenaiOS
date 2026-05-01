@@ -43,9 +43,16 @@ struct IntroPaperGrainOverlay: View {
     }
 
     /// Stable [0,1) from grid coords (no RNG allocation).
+    ///
+    /// All mixing is **`UInt32` with wrapping multiply-add** — never **`Int(ix * prime)`**, which overflows on large canvases / iPad grids and can trap.
     private func hash01(_ ix: Int, _ iy: Int) -> CGFloat {
-        let u = UInt32(bitPattern: Int32(ix &* 374_761_393 &+ iy &* 668_265_263))
-        let v = u & (~(u >> 16))
-        return CGFloat(Int32(v >> 24) & 0xFF) / 255.0
+        let a = UInt32(truncatingIfNeeded: ix)
+        let b = UInt32(truncatingIfNeeded: iy)
+        var u = a &* 374_761_393 &+ b &* 668_265_263
+        u ^= u >> 16
+        u &*= 224_682_2519
+        u ^= u >> 13
+        let top = CGFloat(u >> 24) / 255.0
+        return top
     }
 }
