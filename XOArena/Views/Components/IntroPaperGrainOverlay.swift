@@ -9,6 +9,9 @@ import SwiftUI
 struct IntroPaperGrainOverlay: View {
     @Environment(\.sgThemeMode) private var themeMode
 
+    /// **1** = postojeće; vrednosti ispod za tiši grain na uvodu.
+    var opacityMultiplier: CGFloat = 1
+
     var body: some View {
         Canvas { context, size in
             let step: CGFloat = 5
@@ -39,7 +42,7 @@ struct IntroPaperGrainOverlay: View {
         .drawingGroup()
         .allowsHitTesting(false)
         .blendMode(.multiply)
-        .opacity(themeMode == .light ? 0.38 : 0.55)
+        .opacity((themeMode == .light ? 0.38 : 0.55) * opacityMultiplier)
     }
 
     /// Stable [0,1) from grid coords (no RNG allocation).

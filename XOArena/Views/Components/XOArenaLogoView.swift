@@ -55,7 +55,7 @@ struct XOArenaLogoView: View {
 }
 
 /// Dark paper lifts sepia pigments; light path leaves asset hues intact (**Infinity Paper–adjacent warmth**).
-private struct MonogramSepiaInk: ViewModifier {
+struct MonogramSepiaInk: ViewModifier {
     let themeMode: SGThemeMode
 
     func body(content: Content) -> some View {

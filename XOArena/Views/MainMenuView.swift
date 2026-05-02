@@ -5,7 +5,46 @@
 
 import SwiftUI
 
+// MARK: - Stone surface (gradijent, bez tekstura)
+
+private enum MenuStoneChrome {
+    static let carveInkLight = SGEngravedTextTheme.lightInk
+    static let textSoft = Color(red: 107 / 255, green: 99 / 255, blue: 92 / 255)
+
+    static func titleInk(_ mode: SGThemeMode) -> Color {
+        mode == .light ? carveInkLight : SGEngravedTextTheme.darkInk
+    }
+
+    static func taglineSoft(_ mode: SGThemeMode) -> Color {
+        mode == .light ? textSoft : Color(red: 140 / 255, green: 132 / 255, blue: 124 / 255)
+    }
+
+    static var gradientLight: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color(red: 245 / 255, green: 239 / 255, blue: 232 / 255),
+                Color(red: 228 / 255, green: 217 / 255, blue: 203 / 255)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
+    static var gradientDark: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color(red: 52 / 255, green: 47 / 255, blue: 42 / 255),
+                Color(red: 28 / 255, green: 25 / 255, blue: 22 / 255)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+}
+
 /// Mode picker and session duration — main entry after optional launch intro.
+///
+/// Napomena: **`GameMode`** i callback‑ovi ostaju u potpisu (**`ContentView`**) i logici; pojednostavljeni glavni UI prikazuje samo **PvAI** i **PvP**.
 struct MainMenuView: View {
     @Environment(\.sgThemeMode) private var themeMode
     @Binding var selectedDuration: GameDuration
@@ -16,91 +55,113 @@ struct MainMenuView: View {
     let onLocalDuel: (GameDuration) -> Void
     var onAiVsAITest: ((GameDuration) -> Void)? = nil
 
-    private var t: XOTheme.Tokens { XOTheme.tokens(for: themeMode) }
+    /// Semantic font — Dynamic Type uz veći utisak od PvP.
+    private var pvaiButtonFont: Font {
+        Font.system(.title3, design: .rounded).weight(.semibold)
+    }
+    private static let pvaiToPvpSpacing: CGFloat = 30
+    private static let timerGroupSpacing: CGFloat = 26
 
     var body: some View {
         ZStack {
-            PaperBackgroundView()
+            (themeMode == .light ? MenuStoneChrome.gradientLight : MenuStoneChrome.gradientDark)
                 .ignoresSafeArea()
 
-            VStack(spacing: SGSpacing.lg) {
+            VStack(spacing: 0) {
+                headerBlock
+                    .padding(.bottom, SGSpacing.lg)
+
                 Spacer(minLength: SGSpacing.md)
 
-                VStack(spacing: SGSpacing.sm) {
-                    Text("XOArena")
-                        .font(SGTypography.mainTitle)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(t.textPrimary)
-                        .tracking(SGTypography.titleTracking)
+                VStack(alignment: .leading, spacing: 0) {
+                    pvaiPrimaryButton
 
-                    Text("Eight boards. One focus.")
-                        .font(SGTypography.body)
-                        .foregroundStyle(t.textSecondary)
-                        .multilineTextAlignment(.center)
-                        .tracking(SGTypography.subtitleTracking)
+                    pvpTextButton
+                        .padding(.top, Self.pvaiToPvpSpacing)
 
-                    Rectangle()
-                        .fill(t.accentSubtle.opacity(themeMode == .light ? 0.38 : 0.42))
-                        .frame(width: 52, height: 1)
-                        .padding(.top, SGSpacing.xs)
+                    durationTextPicker
+                        .padding(.top, SGSpacing.xl)
                 }
-                .padding(.horizontal, SGSpacing.xxl)
+                .padding(.horizontal, SGSpacing.xl)
 
-                Spacer()
-
-                VStack(spacing: SGSpacing.sm) {
-                    durationPicker
-
-                    SGButton(title: "Practice", variant: .secondary) {
-                        onPractice(selectedDuration)
-                    }
-                    SGButton(title: "Play vs AI", variant: .primary) {
-                        onVsAI(selectedDuration)
-                    }
-                    VStack(alignment: .leading, spacing: SGSpacing.xs) {
-                        SGButton(title: "Learning", variant: .secondary) {
-                            onLearning(selectedDuration)
-                        }
-                        Text("Learn to beat the AI through short feedback and adaptive challenge.")
-                            .font(SGTypography.small)
-                            .foregroundStyle(t.textSecondary.opacity(themeMode == .light ? 0.74 : 0.68))
-                            .tracking(0.35)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    SGButton(title: "Local duel", variant: .secondary) {
-                        onLocalDuel(selectedDuration)
-                    }
-#if DEBUG
-                    if let onAiVsAITest {
-                        SGButton(title: GameMode.aiVsAI.displayTitle, variant: .secondary) {
-                            onAiVsAITest(selectedDuration)
-                        }
-                    }
-#endif
-                }
-                .padding(.horizontal, SGSpacing.xl + 6)
-                .padding(.bottom, SGSpacing.xxl)
-                .accessibilityElement(children: .contain)
-                .accessibilityHint("Practice and Local duel alternate two humans on each board; Play vs AI faces the device as X.")
+                Spacer(minLength: SGSpacing.xxl)
             }
+            .padding(.top, SGSpacing.lg + SGSpacing.sm)
+            .accessibilityElement(children: .contain)
+            .accessibilityHint("PvAI igra protiv veštačke inteligencije. PvP je lokalni duel dva igrača.")
         }
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                SGThemeToggleControl()
-            }
-        }
     }
 
-    private var durationPicker: some View {
-        Picker("Duration", selection: $selectedDuration) {
+    private var headerBlock: some View {
+        VStack(spacing: SGSpacing.xl + SGSpacing.sm) {
+            Text("XOArena")
+                .font(SGTypography.mainTitle)
+                .fontWeight(.semibold)
+                .foregroundStyle(MenuStoneChrome.titleInk(themeMode))
+                .tracking(SGTypography.titleTracking)
+
+            Text("Eight boards. One focus.")
+                .font(SGTypography.body)
+                .foregroundStyle(MenuStoneChrome.taglineSoft(themeMode).opacity(0.6))
+                .multilineTextAlignment(.center)
+                .tracking(SGTypography.subtitleTracking)
+        }
+        .padding(.horizontal, SGSpacing.xxl + SGSpacing.sm)
+        .padding(.bottom, SGSpacing.sm)
+        .accessibilityElement(children: .contain)
+    }
+
+    private var pvaiPrimaryButton: some View {
+        Button {
+            HapticService.lightImpact()
+            onVsAI(selectedDuration)
+        } label: {
+            Text("PvAI")
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: 50)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(
+            SGEngravedTextButtonStyle(
+                variant: .primary(engravedIntensity: .high),
+                primaryFont: pvaiButtonFont,
+                primaryInk: themeMode == .light ? MenuStoneChrome.carveInkLight : nil
+            )
+        )
+    }
+
+    private var pvpTextButton: some View {
+        Button {
+            onLocalDuel(selectedDuration)
+        } label: {
+            Text("PvP")
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(SGEngravedTextButtonStyle(variant: .secondary(opacity: 0.6)))
+    }
+
+    private var durationTextPicker: some View {
+        HStack(spacing: Self.timerGroupSpacing) {
             ForEach(GameDuration.allCases, id: \.self) { duration in
-                Text(duration.title).tag(duration)
+                Button {
+                    selectedDuration = duration
+                } label: {
+                    Text(duration.title)
+                        .fixedSize()
+                }
+                .buttonStyle(
+                    SGEngravedTextButtonStyle(
+                        variant: .timerOption(isSelected: selectedDuration == duration),
+                        primaryInk: SGEngravedTextTheme.defaultInk(for: themeMode)
+                    )
+                )
             }
         }
-        .pickerStyle(.segmented)
-        .tint(t.accentSubtle.opacity(themeMode == .light ? 0.86 : 0.76))
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
         .accessibilityLabel("Session duration")
+        .accessibilityValue(selectedDuration.title)
     }
 }

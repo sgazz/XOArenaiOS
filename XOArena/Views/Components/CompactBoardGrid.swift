@@ -43,7 +43,7 @@ struct CompactBoardGrid: View {
                         Text("ACTIVE")
                             .font(SGTypography.inkActiveStamp)
                             .tracking(2.8)
-                            .foregroundStyle(t.accentSubtle.opacity(0.78))
+                            .foregroundStyle(t.accentSubtle.opacity(0.64))
                             .accessibilityHidden(true)
                     }
                 }
@@ -102,7 +102,7 @@ struct CompactBoardGrid: View {
             }
             .aspectRatio(1, contentMode: .fit)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(HandInkRippleBoardCellStyle())
         .disabled(cellDisabled(at: index))
         .opacity(cellDisabled(at: index) ? 0.38 : 1)
     }
@@ -149,8 +149,8 @@ private struct CellMarkReveal: View {
     @State private var inkScale: CGFloat = 1
     @State private var inkOpacity: Double = 1
 
-    /// Subtle settle — reads like ink absorbing into paper, not a glossy UI bounce.
-    private static let pulseDuration: CGFloat = 0.15
+    /// Sporiji talas — mastilo koje upija u papir (**0.28** s).
+    private static let pulseDuration: CGFloat = 0.28
 
     var body: some View {
         MarkGlyphView(mark: mark, boardIndex: boardIndex, cellIndex: cellIndex)
@@ -158,8 +158,8 @@ private struct CellMarkReveal: View {
             .opacity(mark == .empty ? 1 : inkOpacity)
             .onChange(of: mark) { old, new in
                 guard old == .empty, new != .empty else { return }
-                inkScale = 0.96
-                inkOpacity = 0.9
+                inkScale = 0.95
+                inkOpacity = 0.88
                 withAnimation(.easeOut(duration: Self.pulseDuration)) {
                     inkScale = 1
                     inkOpacity = 1

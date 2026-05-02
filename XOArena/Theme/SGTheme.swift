@@ -28,6 +28,15 @@ final class SGThemeManager: ObservableObject {
     @Published var mode: SGThemeMode = .light
 }
 
+/// Ikona‑only (bez kapsula); mikro-feedback preko opacity.
+private struct ToolbarThemeIconPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.38 : 0.6)
+            .animation(.easeInOut(duration: 0.25), value: configuration.isPressed)
+    }
+}
+
 /// Quiet dev toggle — does not dominate the bar.
 struct SGThemeToggleControl: View {
     @EnvironmentObject private var themeManager: SGThemeManager
@@ -36,16 +45,15 @@ struct SGThemeToggleControl: View {
         Button {
             themeManager.mode = themeManager.mode == .light ? .dark : .light
         } label: {
-            HStack(spacing: SGSpacing.xs) {
-                Image(systemName: themeManager.mode == .light ? "moon.fill" : "sun.max")
-                    .font(SGTypography.small.weight(.medium))
-                    .imageScale(.small)
-                Text(themeManager.mode == .light ? "Dark" : "Light")
-                    .font(SGTypography.small)
-            }
+            Image(systemName: themeManager.mode == .light ? "moon.fill" : "sun.max.fill")
+                .font(.system(size: 18, weight: .medium))
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(themeManager.mode == .light ? SGColors.inkPrimaryLight : SGColors.textSecondary)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(themeManager.mode == .light ? SGColors.inkPrimaryLight.opacity(0.85) : SGColors.textSecondary)
-        .accessibilityHint("Alternates cappuccino light and ink dark.")
+        .buttonStyle(ToolbarThemeIconPressStyle())
+        .accessibilityLabel(themeManager.mode == .light ? "Dark mode" : "Light mode")
+        .accessibilityHint("Prebacuje između svetlog i tamnog izgleda.")
     }
 }

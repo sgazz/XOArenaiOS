@@ -16,7 +16,7 @@ struct FreehandBoardLinesView: View {
     var body: some View {
         GeometryReader { proxy in
             let side = min(proxy.size.width, proxy.size.height)
-            let tint = accent ? t.accentSubtle.opacity(themeMode == .light ? 0.44 : 0.48) : t.gridLine.opacity(0.92)
+            let tint = accent ? t.accentSubtle.opacity(themeMode == .light ? 0.38 : 0.42) : t.gridLine.opacity(0.92)
             let innerLine: CGFloat = {
                 guard themeMode == .light else { return 0.88 }
                 return accent ? 1.06 : 0.94
@@ -48,32 +48,32 @@ private struct FreehandBoardGridShape: Shape {
 
         var path = Path()
 
-        // Vertical 1 — slight S-bias
-        path.move(to: CGPoint(x: ox + step + 0.4, y: oy + s * 0.02))
+        // Vertical 1 — blaga S‑krivina (ne savršeno ravno)
+        path.move(to: CGPoint(x: ox + step + 0.52, y: oy + s * 0.024))
         path.addQuadCurve(
-            to: CGPoint(x: ox + step - 0.95, y: oy + s * 0.98),
-            control: CGPoint(x: ox + step + 1.25, y: oy + s * 0.51 + 1.8)
+            to: CGPoint(x: ox + step - 0.82, y: oy + s * 0.982),
+            control: CGPoint(x: ox + step + 1.38, y: oy + s * 0.505 + 2.05)
         )
 
-        // Vertical 2 — different bow
-        path.move(to: CGPoint(x: ox + step * 2 - 0.55, y: oy + s * 0.03))
+        // Vertical 2
+        path.move(to: CGPoint(x: ox + step * 2 - 0.62, y: oy + s * 0.028))
         path.addQuadCurve(
-            to: CGPoint(x: ox + step * 2 + 0.7, y: oy + s * 0.97),
-            control: CGPoint(x: ox + step * 2 - 1.9, y: oy + s * 0.47 - 0.8)
+            to: CGPoint(x: ox + step * 2 + 0.66, y: oy + s * 0.968),
+            control: CGPoint(x: ox + step * 2 - 2.08, y: oy + s * 0.462 - 0.65)
         )
 
         // Horizontal 1
-        path.move(to: CGPoint(x: ox + s * 0.02, y: oy + step - 0.5))
+        path.move(to: CGPoint(x: ox + s * 0.024, y: oy + step - 0.42))
         path.addQuadCurve(
-            to: CGPoint(x: ox + s * 0.985, y: oy + step + 0.45),
-            control: CGPoint(x: ox + s * 0.49 - 2.6, y: oy + step - 1.4)
+            to: CGPoint(x: ox + s * 0.978, y: oy + step + 0.52),
+            control: CGPoint(x: ox + s * 0.485 - 2.35, y: oy + step - 1.62)
         )
 
         // Horizontal 2
-        path.move(to: CGPoint(x: ox + s * 0.03, y: oy + step * 2 + 0.6))
+        path.move(to: CGPoint(x: ox + s * 0.032, y: oy + step * 2 + 0.68))
         path.addQuadCurve(
-            to: CGPoint(x: ox + s * 0.97, y: oy + step * 2 - 0.55),
-            control: CGPoint(x: ox + s * 0.46 + 1.9, y: oy + step * 2 + 1.3)
+            to: CGPoint(x: ox + s * 0.962, y: oy + step * 2 - 0.48),
+            control: CGPoint(x: ox + s * 0.455 + 2.15, y: oy + step * 2 + 1.42)
         )
 
         return path

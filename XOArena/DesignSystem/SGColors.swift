@@ -24,8 +24,17 @@ enum SGColors {
     /// Vignette / edge wash on light paper (muted umber — not harsh black).
     static let vignetteWarm = Color(hex: 0x5C4334)
 
-    // MARK: Launch intro (cappuccino — solid, no gradients)
+    // MARK: Launch intro (cappuccino — solids + calibrated gradient)
     static let introPaperCappuccino = Color(hex: 0xF3EDE4)
+    /// Vertical gradient (premium calm — light intro).
+    static let introGradientTopLight = Color(hex: 0xF6EFE6)
+    static let introGradientBottomLight = Color(hex: 0xEDE3D6)
+    /// Quiet depth for dark-mode intro slab.
+    static let introGradientTopDark = Color(hex: 0x2A2623)
+    static let introGradientBottomDark = Color(hex: 0x221F1C)
+    /// Stronger serif title ink (light intro).
+    static let introSerifTitleLight = Color(hex: 0x1F1B17)
+    static let introSerifTitleDark = Color(hex: 0xF2EEE9)
     /// Warm ink paper for intro in dark mode (not pure black).
     static let introPaperDark = Color(hex: 0x23201E)
     static let introTextPrimary = Color(hex: 0x2C2825)

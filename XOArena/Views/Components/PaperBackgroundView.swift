@@ -22,7 +22,7 @@ struct PaperBackgroundView: View {
 
             PaperGrainNoiseLayer(lightPaper: lightPaper)
                 .blendMode(lightPaper ? .multiply : .softLight)
-                .opacity(lightPaper ? 0.28 : 0.45)
+                .opacity(lightPaper ? 0.32 : 0.46)
                 .allowsHitTesting(false)
 
             PaperGrainNoiseLayer(lightPaper: lightPaper, dotScale: 0.82, jitter: 0.9)

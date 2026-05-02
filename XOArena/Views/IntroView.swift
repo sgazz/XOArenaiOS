@@ -14,16 +14,11 @@ struct IntroView: View {
 
     let onFinish: () -> Void
 
-    @State private var markVisible = false
     @State private var titleVisible = false
     @State private var subtitleVisible = false
     @State private var hintVisible = false
     @State private var isExiting = false
     @State private var exitStarted = false
-
-    private var backgroundColor: Color {
-        themeMode == .light ? SGColors.introPaperCappuccino : SGColors.introPaperDark
-    }
 
     private var introSerifTitleFont: Font {
         let m = UIFontMetrics(forTextStyle: .title1)
@@ -31,12 +26,35 @@ struct IntroView: View {
         return .system(size: size, weight: .medium, design: .serif)
     }
 
+    private var titleInk: Color {
+        themeMode == .light ? SGColors.introSerifTitleLight : SGColors.introSerifTitleDark
+    }
+
+    /// Lagani vertikalni preliv (SG Quiet — bez jakih gradijenata).
+    private var introBackground: some View {
+        Group {
+            if themeMode == .light {
+                LinearGradient(
+                    colors: [SGColors.introGradientTopLight, SGColors.introGradientBottomLight],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            } else {
+                LinearGradient(
+                    colors: [SGColors.introGradientTopDark, SGColors.introGradientBottomDark],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+        }
+    }
+
     var body: some View {
         ZStack {
-            backgroundColor
+            introBackground
                 .ignoresSafeArea()
 
-            IntroPaperGrainOverlay()
+            IntroPaperGrainOverlay(opacityMultiplier: 0.42)
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -52,7 +70,8 @@ struct IntroView: View {
                     .zIndex(1)
                     .padding(.leading, SGSpacing.md)
                     .padding(.trailing, SGSpacing.lg)
-                    .padding(.bottom, SGSpacing.lg + dynamicTypePadding)
+                    .padding(.top, SGSpacing.sm)
+                    .padding(.bottom, SGSpacing.xxl + SGSpacing.sm + dynamicTypePadding)
             }
             .scaleEffect(isExiting ? 1.02 : 1.0, anchor: .center)
             .opacity(isExiting ? 0 : 1)
@@ -85,35 +104,35 @@ struct IntroView: View {
         VStack(spacing: 0) {
             Spacer(minLength: SGSpacing.sm)
 
-            VStack(spacing: SGSpacing.md) {
-                IntroXOMonogramView()
-                    .opacity(markVisible ? 1 : 0)
+            VStack(spacing: SGSpacing.lg) {
+                    Text("XOArena")
+                        .font(introSerifTitleFont)
+                        .foregroundStyle(titleInk)
+                        .tracking(SGTypography.titleTracking + 4)
+                        .multilineTextAlignment(.center)
+                        .minimumScaleFactor(0.78)
+                        .lineLimit(1)
+                        .sgRaisedText(intensity: .medium, color: titleInk)
+                        .opacity(titleVisible ? 1 : 0)
 
-                Text("XOArena")
-                    .font(introSerifTitleFont)
-                    .foregroundStyle(SGColors.introTextPrimary.opacity(themeMode == .light ? 1 : 0.94))
-                    .tracking(SGTypography.titleTracking + 0.5)
-                    .multilineTextAlignment(.center)
-                    .minimumScaleFactor(0.78)
-                    .lineLimit(1)
-                    .opacity(titleVisible ? 1 : 0)
-
-                Text("Eight boards. One focus.")
-                    .font(SGTypography.body)
-                    .foregroundStyle(SGColors.introTextSecondary.opacity(themeMode == .light ? 0.62 : 0.58))
-                    .tracking(SGTypography.subtitleTracking)
-                    .multilineTextAlignment(.center)
-                    .minimumScaleFactor(0.82)
-                    .lineLimit(subtitleDynamicLineLimit)
-                    .opacity(subtitleVisible ? 1 : 0)
+                    Text("Eight boards. One focus.")
+                        .font(SGTypography.body)
+                        .foregroundStyle(SGColors.introTextSecondary)
+                        .tracking(SGTypography.subtitleTracking + 0.2)
+                        .multilineTextAlignment(.center)
+                        .minimumScaleFactor(0.82)
+                        .lineLimit(subtitleDynamicLineLimit)
+                        .sgEngravedText(intensity: .low, color: SGColors.introTextSecondary)
+                        .opacity(subtitleVisible ? 1 : 0)
             }
             .padding(.horizontal, SGSpacing.xl)
 
-            Spacer(minLength: SGSpacing.md)
+            Spacer(minLength: SGSpacing.sm)
 
             introHintPhrase
                 .multilineTextAlignment(.center)
                 .opacity(hintVisible ? 1 : 0)
+                .padding(.bottom, SGSpacing.sm)
 
             Spacer(minLength: SGSpacing.sm)
         }
@@ -133,37 +152,33 @@ struct IntroView: View {
         ViewThatFits(in: .horizontal) {
             Text("Make your first move")
                 .font(SGTypography.small)
-                .foregroundStyle(SGColors.introTextSecondary.opacity(0.48))
-                .tracking(0.35)
+                .foregroundStyle(SGColors.introTextSecondary.opacity(0.55))
+                .tracking(0.45)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(0.82)
+                .sgEngravedText(intensity: .low, color: SGColors.introTextSecondary.opacity(0.55))
             Text("Begin")
                 .font(SGTypography.small)
-                .foregroundStyle(SGColors.introTextSecondary.opacity(0.48))
-                .tracking(0.35)
+                .foregroundStyle(SGColors.introTextSecondary.opacity(0.55))
+                .tracking(0.45)
+                .sgEngravedText(intensity: .low, color: SGColors.introTextSecondary.opacity(0.55))
         }
     }
 
     private func runEntranceAnimations() {
-        markVisible = false
         titleVisible = false
         subtitleVisible = false
         hintVisible = false
 
         withAnimation(.easeOut(duration: 0.38)) {
-            markVisible = true
+            titleVisible = true
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
-            withAnimation(.easeOut(duration: 0.42)) {
-                titleVisible = true
-            }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
             withAnimation(.easeOut(duration: 0.42)) {
                 subtitleVisible = true
             }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.52) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.36) {
             withAnimation(.easeOut(duration: 0.46)) {
                 hintVisible = true
             }

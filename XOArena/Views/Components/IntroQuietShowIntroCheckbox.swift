@@ -35,12 +35,13 @@ struct IntroQuietShowIntroCheckbox: View {
                 .frame(width: 18, height: 18)
 
                 Text("Show intro on launch")
-                    .font(SGTypography.small)
-                    .foregroundStyle(SGColors.introTextSecondary.opacity(0.64))
+                    .font(.system(size: 11, weight: .regular, design: .rounded))
+                    .foregroundStyle(SGColors.introTextSecondary.opacity(0.62))
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)
                     .minimumScaleFactor(0.82)
                     .layoutPriority(-1)
+                    .sgEngravedText(intensity: .low, color: SGColors.introTextSecondary.opacity(0.62))
 
                 Spacer(minLength: 0)
             }

@@ -52,15 +52,15 @@ struct MarkGlyphView: View {
         switch themeMode {
         case .dark:
             xTriStroke(
-                outer: SGColors.textDark.opacity(0.26),
-                mid: SGColors.textDark.opacity(0.45),
-                inner: SGColors.textDark.opacity(0.93)
+                outer: SGColors.textSecondary.opacity(0.32),
+                mid: SGColors.textDark.opacity(0.48),
+                inner: SGColors.textDark.opacity(0.94)
             )
         case .light:
             xTriStroke(
-                outer: SGColors.accentLightMuted.opacity(0.34),
-                mid: SGColors.accentLightMuted.opacity(0.58),
-                inner: SGColors.inkPrimaryLight.opacity(0.92)
+                outer: SGColors.inkPrimaryLight.opacity(0.32),
+                mid: SGColors.inkSecondaryLight.opacity(0.54),
+                inner: SGColors.inkPrimaryLight.opacity(0.94)
             )
         }
     }
@@ -70,15 +70,15 @@ struct MarkGlyphView: View {
         switch themeMode {
         case .dark:
             oTriStroke(
-                outer: SGColors.textSecondary.opacity(0.38),
-                mid: SGColors.textSecondary.opacity(0.88),
-                inner: SGColors.textSecondary.opacity(0.96)
+                outer: SGColors.textSecondary.opacity(0.42),
+                mid: SGColors.textDark.opacity(0.74),
+                inner: SGColors.textDark.opacity(0.95)
             )
         case .light:
             oTriStroke(
-                outer: SGColors.inkSecondaryLight.opacity(0.44),
-                mid: SGColors.inkSecondaryLight.opacity(0.78),
-                inner: SGColors.inkPrimaryLight.opacity(0.9)
+                outer: SGColors.inkSecondaryLight.opacity(0.46),
+                mid: SGColors.inkPrimaryLight.opacity(0.62),
+                inner: SGColors.inkPrimaryLight.opacity(0.92)
             )
         }
     }
@@ -110,16 +110,16 @@ private struct HandDrawnXShape: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
 
-        path.move(to: CGPoint(x: rect.minX + rect.width * 0.14, y: rect.minY + rect.height * 0.20))
+        path.move(to: CGPoint(x: rect.minX + rect.width * 0.13, y: rect.minY + rect.height * 0.21))
         path.addQuadCurve(
-            to: CGPoint(x: rect.maxX - rect.width * 0.13, y: rect.maxY - rect.height * 0.14),
-            control: CGPoint(x: rect.midX + rect.width * 0.18, y: rect.midY - rect.height * 0.10)
+            to: CGPoint(x: rect.maxX - rect.width * 0.125, y: rect.maxY - rect.height * 0.135),
+            control: CGPoint(x: rect.midX + rect.width * 0.192, y: rect.midY - rect.height * 0.108)
         )
 
-        path.move(to: CGPoint(x: rect.maxX - rect.width * 0.12, y: rect.minY + rect.height * 0.17))
+        path.move(to: CGPoint(x: rect.maxX - rect.width * 0.118, y: rect.minY + rect.height * 0.168))
         path.addQuadCurve(
-            to: CGPoint(x: rect.minX + rect.width * 0.16, y: rect.maxY - rect.height * 0.16),
-            control: CGPoint(x: rect.midX - rect.width * 0.20, y: rect.midY + rect.height * 0.16)
+            to: CGPoint(x: rect.minX + rect.width * 0.162, y: rect.maxY - rect.height * 0.158),
+            control: CGPoint(x: rect.midX - rect.width * 0.205, y: rect.midY + rect.height * 0.172)
         )
         return path
     }
@@ -134,16 +134,16 @@ private struct TiltedEllipseMark: Shape {
         let rx = rect.width * 0.36
         let ry = rect.height * 0.38
 
-        let right = CGPoint(x: mx + rx * 0.96, y: my - ry * 0.05)
-        let bottom = CGPoint(x: mx + rx * 0.05, y: my + ry * 0.88)
-        let left = CGPoint(x: mx - rx * 0.92, y: my + ry * 0.10)
-        let top = CGPoint(x: mx - rx * 0.14, y: my - ry * 0.90)
+        let right = CGPoint(x: mx + rx * 0.965, y: my - ry * 0.048)
+        let bottom = CGPoint(x: mx + rx * 0.048, y: my + ry * 0.885)
+        let left = CGPoint(x: mx - rx * 0.915, y: my + ry * 0.108)
+        let top = CGPoint(x: mx - rx * 0.142, y: my - ry * 0.895)
 
         path.move(to: right)
-        path.addQuadCurve(to: bottom, control: CGPoint(x: mx + rx * 0.94, y: my + ry * 0.55))
-        path.addQuadCurve(to: left, control: CGPoint(x: mx - rx * 0.48, y: my + ry * 1.06))
-        path.addQuadCurve(to: top, control: CGPoint(x: mx - rx * 0.94, y: my - ry * 0.48))
-        path.addQuadCurve(to: right, control: CGPoint(x: mx + rx * 0.50, y: my - ry * 0.86))
+        path.addQuadCurve(to: bottom, control: CGPoint(x: mx + rx * 0.932, y: my + ry * 0.562))
+        path.addQuadCurve(to: left, control: CGPoint(x: mx - rx * 0.472, y: my + ry * 1.04))
+        path.addQuadCurve(to: top, control: CGPoint(x: mx - rx * 0.948, y: my - ry * 0.465))
+        path.addQuadCurve(to: right, control: CGPoint(x: mx + rx * 0.512, y: my - ry * 0.848))
         path.closeSubpath()
         return path
     }

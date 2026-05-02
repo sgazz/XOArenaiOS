@@ -60,7 +60,7 @@ struct GameView: View {
             }
             .allowsHitTesting(true)
         }
-        .navigationTitle(viewModel.gameMode == .learning ? "Learning" : "Session")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             viewModel.onGameViewAppear()
@@ -72,49 +72,81 @@ struct GameView: View {
             ToolbarItem(placement: .topBarLeading) {
                 SGThemeToggleControl()
             }
+            ToolbarItem(placement: .principal) {
 #if DEBUG
-            if viewModel.gameMode == .vsAI || viewModel.gameMode == .aiVsAI {
-                ToolbarItem(placement: .principal) {
-                    VStack(spacing: 6) {
-                        if viewModel.gameMode == .aiVsAI {
-                            Picker("Speed", selection: Binding(
-                                get: { viewModel.aiVsAIDelayPreset },
-                                set: { viewModel.aiVsAIDelayPreset = $0 }
-                            )) {
-                                ForEach(AIDebugDelayPreset.allCases, id: \.self) { preset in
-                                    Text(preset.rawValue.capitalized).tag(preset)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                            .labelsHidden()
-                            .accessibilityLabel("AI vs AI pacing")
-                            .accessibilityHint("Slows or speeds automatic moves for debugging.")
-                        }
-                        Picker("AI difficulty", selection: Binding(
-                            get: { viewModel.aiDifficulty },
-                            set: { viewModel.aiDifficulty = $0 }
-                        )) {
-                            ForEach(AIDifficulty.allCases, id: \.self) { level in
-                                Text(level.rawValue.capitalized).tag(level)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                        .accessibilityLabel("AI difficulty")
-                        .accessibilityHint("Easy random, medium mix, hard minimax.")
+                Group {
+                    if showAIDebugPrincipalToolbar {
+                        aiDebugToolbarPrincipalBody
+                    } else {
+                        gameNavTitleBarLabel
                     }
                 }
-            }
+#else
+                gameNavTitleBarLabel
 #endif
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Reset") {
                     viewModel.resetGame()
                 }
-                .tint(t.accentSubtle)
                 .font(SGTypography.small)
+                .foregroundStyle(t.textPrimary)
+                .sgEngravedText(intensity: .low, color: t.textPrimary)
             }
         }
         .sgToolbarStyle()
+    }
+
+#if DEBUG
+    private var showAIDebugPrincipalToolbar: Bool {
+        viewModel.gameMode == .vsAI || viewModel.gameMode == .aiVsAI
+    }
+
+    @ViewBuilder
+    private var aiDebugToolbarPrincipalBody: some View {
+        VStack(spacing: 6) {
+            if viewModel.gameMode == .aiVsAI {
+                Picker("Speed", selection: Binding(
+                    get: { viewModel.aiVsAIDelayPreset },
+                    set: { viewModel.aiVsAIDelayPreset = $0 }
+                )) {
+                    ForEach(AIDebugDelayPreset.allCases, id: \.self) { preset in
+                        Text(preset.rawValue.capitalized).tag(preset)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .accessibilityLabel("AI vs AI pacing")
+                .accessibilityHint("Slows or speeds automatic moves for debugging.")
+            }
+            Picker("AI difficulty", selection: Binding(
+                get: { viewModel.aiDifficulty },
+                set: { viewModel.aiDifficulty = $0 }
+            )) {
+                ForEach(AIDifficulty.allCases, id: \.self) { level in
+                    Text(level.rawValue.capitalized).tag(level)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .accessibilityLabel("AI difficulty")
+            .accessibilityHint("Easy random, medium mix, hard minimax.")
+        }
+    }
+#endif
+
+    private var navigationScreenTitleKey: String {
+        viewModel.gameMode == .learning ? "Learning" : "Session"
+    }
+
+    private var gameNavTitleBarLabel: some View {
+        Text(navigationScreenTitleKey)
+            .font(SGTypography.body)
+            .fontWeight(.semibold)
+            .foregroundStyle(t.textPrimary)
+            .sgEngravedText(intensity: .medium, color: t.textPrimary)
+            .accessibilityLabel(navigationScreenTitleKey)
+            .accessibilityAddTraits(.isHeader)
     }
 
     private func boardsGrid(metrics: GameLayoutMetrics) -> some View {
@@ -150,6 +182,7 @@ struct GameView: View {
                         .font(compact ? SGTypography.small : SGTypography.body)
                         .tracking(compact ? 0.5 : SGTypography.subtitleTracking)
                         .foregroundStyle(t.textPrimary)
+                        .sgEngravedText(intensity: .medium, color: t.textPrimary)
                     Text("Play until time runs out.")
                         .font(SGTypography.small)
                         .foregroundStyle(t.textSecondary.opacity(0.82))
@@ -182,45 +215,27 @@ struct GameView: View {
         VStack(alignment: .leading, spacing: 1) {
             Text(title.uppercased())
                 .font(SGTypography.small)
-                .foregroundStyle(t.textSecondary)
+                .foregroundStyle(t.textSecondary.opacity(0.9))
                 .tracking(1.05)
             Text(value)
                 .font(SGTypography.small)
                 .fontWeight(.semibold)
                 .foregroundStyle(t.textPrimary)
+                .sgEngravedText(intensity: .low, color: t.textPrimary)
         }
-        .padding(.horizontal, SGSpacing.sm)
-        .padding(.vertical, SGSpacing.xs)
-        .background(
-            RoundedRectangle(cornerRadius: SGRadius.sm, style: .continuous)
-                .fill(t.surfaceMuted)
-                .overlay(
-                    RoundedRectangle(cornerRadius: SGRadius.sm, style: .continuous)
-                        .strokeBorder(t.border.opacity(themeMode == .light ? 0.5 : 0.45), lineWidth: 0.85)
-                )
-        )
+        .padding(.trailing, SGSpacing.xs)
     }
 
     private var timerChip: some View {
         let urgency = viewModel.remainingSeconds <= 10 && viewModel.sessionState == .playing
+        let ink = urgency ? t.accent : t.textPrimary
         return Text(viewModel.formattedRemainingTime)
             .font(SGTypography.small)
             .fontWeight(.semibold)
             .monospacedDigit()
-            .foregroundStyle(urgency ? t.accent : t.textPrimary)
-            .padding(.horizontal, SGSpacing.sm)
-            .padding(.vertical, SGSpacing.xs)
-            .background(
-                RoundedRectangle(cornerRadius: SGRadius.sm, style: .continuous)
-                    .fill(t.surfaceMuted)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: SGRadius.sm, style: .continuous)
-                            .strokeBorder(
-                                (urgency ? t.accentSubtle : t.border).opacity(themeMode == .light ? 0.52 : 0.45),
-                                lineWidth: 0.85
-                            )
-                    )
-            )
+            .foregroundStyle(ink)
+            .sgEngravedText(intensity: .medium, color: ink)
+            .padding(.leading, SGSpacing.sm)
             .accessibilityLabel("Time remaining \(viewModel.formattedRemainingTime)")
     }
 
@@ -349,6 +364,7 @@ private struct LearningModeStripView: View {
                 .tracking(compactVertical ? 0.3 : 0.35)
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
+                .sgEngravedText(intensity: compactVertical ? .low : .medium, color: tokens.textPrimary)
             Text("Goal: \(profile.currentLevel.targetText).")
                 .font(bodyFont)
                 .foregroundStyle(tokens.textSecondary.opacity(0.9))

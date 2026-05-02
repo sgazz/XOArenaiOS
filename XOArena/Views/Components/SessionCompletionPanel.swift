@@ -24,9 +24,9 @@ struct SessionCompletionPanel: View {
         VStack(alignment: .leading, spacing: compact ? SGSpacing.sm : SGSpacing.md) {
             headerBlock(compact: compact)
 
-            Rectangle()
-                .fill(t.border.opacity(themeMode == .light ? 0.45 : 0.38))
-                .frame(height: 1)
+            SessionHandInkDividerShape()
+                .stroke(t.border.opacity(themeMode == .light ? 0.42 : 0.36), style: StrokeStyle(lineWidth: 0.95, lineCap: .round))
+                .frame(height: 3)
 
             VStack(alignment: .leading, spacing: compact ? SGSpacing.xs : SGSpacing.sm) {
                 summaryRow(title: xCaption, value: "\(stats.xBoardWins)")
@@ -41,6 +41,7 @@ struct SessionCompletionPanel: View {
                         .fontWeight(.medium)
                         .foregroundStyle(t.textPrimary.opacity(0.92))
                         .tracking(0.25)
+                        .sgEngravedText(intensity: .low, color: t.textPrimary.opacity(0.92))
 
                     Text(learningCoachLine(for: lp))
                         .font(SGTypography.small)
@@ -54,9 +55,19 @@ struct SessionCompletionPanel: View {
                 .accessibilityLabel("Level \(lp.currentLevel.title). \(learningCoachLine(for: lp))")
             }
 
-            SGButton(title: "Play Again", variant: .primary, action: onPlayAgain)
-                .frame(height: 44)
-                .padding(.top, compact ? SGSpacing.xs : SGSpacing.sm)
+            Button {
+                HapticService.lightImpact()
+                onPlayAgain()
+            } label: {
+                Text("Play Again")
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(
+                SGEngravedTextButtonStyle(variant: .primary(engravedIntensity: .medium), primaryInk: t.textPrimary)
+            )
+            .padding(.top, compact ? SGSpacing.xs : SGSpacing.sm)
         }
         .padding(compact ? SGSpacing.md : SGSpacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -68,7 +79,7 @@ struct SessionCompletionPanel: View {
                         .strokeBorder(t.border.opacity(themeMode == .light ? 0.5 : 0.42), lineWidth: 0.9)
                 )
         )
-        .shadow(color: t.shadowCalm.opacity(0.88), radius: t.shadowCalmRadius, y: themeMode == .light ? 2 : 3)
+        .shadow(color: t.shadowCalm.opacity(0.28), radius: floor(t.shadowCalmRadius * 0.55), y: themeMode == .light ? 1 : 1.5)
         .opacity(Double(revealOpacity))
         .offset(y: 10 - revealOpacity * 10)
         .onAppear {
@@ -101,6 +112,7 @@ struct SessionCompletionPanel: View {
                 .font(compact ? Font.system(size: 17, weight: .semibold, design: .rounded) : SGTypography.sectionTitle)
                 .tracking(SGTypography.subtitleTracking + 0.35)
                 .foregroundStyle(t.textPrimary)
+                .sgEngravedText(intensity: .medium, color: t.textPrimary)
 
             Text(reason.subtitle)
                 .font(SGTypography.small)
@@ -123,6 +135,7 @@ struct SessionCompletionPanel: View {
                 .fontWeight(.semibold)
                 .foregroundStyle(t.textPrimary)
                 .monospacedDigit()
+                .sgEngravedText(intensity: .low, color: t.textPrimary)
         }
         .minimumScaleFactor(0.82)
         .lineLimit(1)
@@ -139,5 +152,19 @@ struct SessionCompletionPanel: View {
             return "Good reps — tighten threats next session."
         }
         return profile.currentLevel.shortDescription
+    }
+}
+
+/// Blago nepravilo „povlačenje perom“ umesto strogo horizontalne linije.
+private struct SessionHandInkDividerShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let y = rect.midY
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX + 0.2, y: y - 0.25))
+        p.addQuadCurve(
+            to: CGPoint(x: rect.maxX - 0.25, y: y + 0.22),
+            control: CGPoint(x: rect.midX + 0.8, y: y + 0.48)
+        )
+        return p
     }
 }
