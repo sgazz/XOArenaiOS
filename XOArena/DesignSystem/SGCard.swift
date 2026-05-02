@@ -5,12 +5,19 @@
 
 import SwiftUI
 
-/// Paper slip presence: active boards feel materially closer (light: cappuccino; dark: ink).
+// Boje moraju biti van generičkog `SGCard` — unutrašnji tip ne sme imati `static let` skladišta.
+private enum SGCardStoneLight {
+    static let paper = Color(red: 243 / 255, green: 237 / 255, blue: 230 / 255)
+    static let surface = Color(red: 232 / 255, green: 222 / 255, blue: 210 / 255)
+    static let shadow = Color(red: 205 / 255, green: 191 / 255, blue: 175 / 255)
+    static let ink = Color(red: 43 / 255, green: 38 / 255, blue: 34 / 255)
+}
+
+/// Tabla kao blago urezan „stone slab“ u cappuccino tonovima (samo **CompactBoardGrid** u ovom projektu).
 struct SGCard<Content: View>: View {
     @Environment(\.sgThemeMode) private var themeMode
 
     var isActive: Bool = false
-    /// Multiplier for tonal contrast on neutral ink frame (deterministic drift).
     var borderTone: CGFloat = 1
     @ViewBuilder var content: () -> Content
 
@@ -18,14 +25,14 @@ struct SGCard<Content: View>: View {
         switch themeMode {
         case .light:
             if isActive {
-                return SGColors.paperSurfaceActiveLight.opacity(0.96)
+                return SGCardStoneLight.surface.opacity(0.97)
             }
-            return SGColors.paperSurfaceLight.opacity(0.93)
+            return SGCardStoneLight.paper
         case .dark:
             if isActive {
-                return SGColors.surfaceLight.opacity(0.074)
+                return SGColors.surfaceLight.opacity(0.078)
             }
-            return SGColors.surfaceLight.opacity(0.055)
+            return SGColors.surfaceLight.opacity(0.056)
         }
     }
 
@@ -33,75 +40,44 @@ struct SGCard<Content: View>: View {
         let tone = min(max(borderTone, 0.75), 1.25)
         switch themeMode {
         case .light:
-            let base = isActive ? 0.54 : 0.4
-            return SGColors.borderLightWarm.opacity(min(1, base * CGFloat(tone)))
+            let base = isActive ? 0.32 : 0.2
+            return SGCardStoneLight.ink.opacity(min(1, base * tone))
         case .dark:
             if isActive {
-                return SGColors.borderDark.opacity(min(1, 0.46 * tone))
+                return SGColors.borderDark.opacity(min(1, 0.4 * tone))
             }
-            return SGColors.borderDark.opacity(min(1, 0.34 * tone))
+            return SGColors.borderDark.opacity(min(1, 0.28 * tone))
         }
     }
 
-    private var underlineColor: Color {
+    private var slabShadow: (color: Color, radius: CGFloat, y: CGFloat) {
         switch themeMode {
         case .light:
-            return SGColors.accentLightMuted.opacity(0.3)
+            return (
+                SGCardStoneLight.shadow.opacity(isActive ? 0.24 : 0.14),
+                isActive ? 3.2 : 2,
+                1
+            )
         case .dark:
-            return SGColors.accent.opacity(0.18)
+            return (
+                Color.black.opacity(isActive ? 0.22 : 0.12),
+                isActive ? 4 : 2.5,
+                1.2
+            )
         }
     }
-
-    private var cardShadowColor: Color {
-        switch themeMode {
-        case .light:
-            return SGColors.vignetteWarm.opacity(isActive ? 0.16 : 0.09)
-        case .dark:
-            return Color.black.opacity(isActive ? 0.44 : 0.21)
-        }
-    }
-
-    private var underlineAccent: Bool { isActive }
 
     var body: some View {
         content()
-            .padding(SGSpacing.sm + 2)
+            .padding(SGSpacing.sm)
             .background(
                 RoundedRectangle(cornerRadius: SGRadius.lg, style: .continuous)
                     .fill(paperFill)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: SGRadius.lg, style: .continuous)
-                    .strokeBorder(borderColor, lineWidth: isActive ? (themeMode == .light ? 0.55 : 0.7) : (themeMode == .light ? 0.48 : 0.55))
+                    .strokeBorder(borderColor, lineWidth: isActive ? 0.52 : 0.38)
             )
-            .overlay(alignment: .bottom) {
-                if underlineAccent {
-                    HandDrawnCardUnderlineShape()
-                        .stroke(underlineColor, style: StrokeStyle(lineWidth: themeMode == .light ? 1.1 : 1, lineCap: .round, lineJoin: .round))
-                        .padding(.horizontal, SGSpacing.sm + SGSpacing.sm + 2)
-                        .padding(.bottom, SGSpacing.sm)
-                        .allowsHitTesting(false)
-                }
-            }
-            .shadow(
-                color: cardShadowColor,
-                radius: isActive ? (themeMode == .light ? 8 : 11) : (themeMode == .light ? 4 : 5),
-                x: 0,
-                y: isActive ? (themeMode == .light ? 2 : 3) : 2
-            )
-    }
-}
-
-/// Blago talasasta donja linija aktivne kartice — kao crta olovkom, ne vektor UI.
-private struct HandDrawnCardUnderlineShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        let y = rect.midY + 0.12
-        var p = Path()
-        p.move(to: CGPoint(x: rect.minX + 0.35, y: y - 0.18))
-        p.addQuadCurve(
-            to: CGPoint(x: rect.maxX - 0.4, y: y + 0.2),
-            control: CGPoint(x: rect.midX + 1.15, y: y + 0.55)
-        )
-        return p
+            .shadow(color: slabShadow.color, radius: slabShadow.radius, x: 0, y: slabShadow.y)
     }
 }

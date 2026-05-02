@@ -14,57 +14,58 @@ struct CompactBoardGrid: View {
     let boardIndex: Int
     let board: XOBoard
     let isFocused: Bool
-    /// Per playable cell tap (focused board checks live in **ViewModel**).
     let permitsCellPlacement: (Int) -> Bool
     let onSelectCell: (Int) -> Void
     var boardSize: CGFloat
+    /// Trenutačni `stats.totalMoves` iz sesije (za seme oznaka pri postavljanju).
+    var sessionTotalMoves: Int = 0
+    var focusedScaleBoost: CGFloat = 1.05
+    var unfocusedOpacityFactor: CGFloat = 0.85
 
-    /// Ensures frame dimensions are finite and non-negative to avoid runtime layout errors.
+    private enum StoneLight {
+        static let ink = Color(red: 43 / 255, green: 38 / 255, blue: 34 / 255)
+    }
+
     private var safeBoardSize: CGFloat {
-        // Guard against NaN or infinite values
         if !boardSize.isFinite || boardSize.isNaN {
             return 0
         }
-        // Clamp to a minimum of 0 to avoid negative sizes
         return max(0, boardSize)
     }
 
-    private var t: XOTheme.Tokens { XOTheme.tokens(for: themeMode) }
-
-    private var boardInkDrift: CGFloat {
-        InkVariance.boardBorderIntensity(boardIndex: boardIndex)
-    }
-
     var body: some View {
-        SGCard(isActive: isFocused, borderTone: boardInkDrift) {
-            VStack(alignment: .leading, spacing: SGSpacing.sm) {
-                ZStack(alignment: .leading) {
-                    if isFocused {
-                        Text("ACTIVE")
-                            .font(SGTypography.inkActiveStamp)
-                            .tracking(2.8)
-                            .foregroundStyle(t.accentSubtle.opacity(0.64))
-                            .accessibilityHidden(true)
-                    }
-                }
-                .frame(height: 11)
-
-                FreehandBoardView(accent: isFocused) {
-                    boardCells
-                }
-                .clipShape(RoundedRectangle(cornerRadius: SGRadius.sm, style: .continuous))
+        ZStack(alignment: .topLeading) {
+            FreehandBoardView(accent: isFocused, boardIndex: boardIndex) {
+                boardCells
+            }
+            if isFocused {
+                Circle()
+                    .fill(themeMode == .light ? StoneLight.ink.opacity(0.52) : Color.white.opacity(0.38))
+                    .frame(width: 4, height: 4)
+                    .padding(.leading, 6)
+                    .padding(.top, 6)
+                    .accessibilityHidden(true)
             }
         }
         .frame(width: safeBoardSize, height: safeBoardSize)
-        .rotationEffect(.degrees(boardTiltDegrees))
-        .opacity(boardSheetOpacity)
-        .scaleEffect(InkVariance.boardPresenceScale(boardIndex: boardIndex))
+        .scaleEffect(InkVariance.boardPresenceScale(boardIndex: boardIndex) * presenceScaleMultiply)
+        .opacity(boardSheetOpacity * presenceOpacityMultiply)
+        .accessibilityLabel(isFocused ? "Active board \(boardIndex + 1)" : "Board \(boardIndex + 1)")
+        .accessibilityAddTraits(isFocused ? .isSelected : [])
+    }
+
+    private var presenceScaleMultiply: CGFloat {
+        isFocused ? focusedScaleBoost : 1
+    }
+
+    private var presenceOpacityMultiply: CGFloat {
+        isFocused ? 1 : CGFloat(unfocusedOpacityFactor)
     }
 
     private var boardCells: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 0) {
             ForEach(0..<GameConstants.gridSide, id: \.self) { row in
-                HStack(spacing: 4) {
+                HStack(spacing: 0) {
                     ForEach(0..<GameConstants.gridSide, id: \.self) { column in
                         let index = row * GameConstants.gridSide + column
                         cellButton(at: index)
@@ -75,69 +76,35 @@ struct CompactBoardGrid: View {
     }
 
     private func cellButton(at index: Int) -> some View {
-        let edgeTone = CGFloat(InkVariance.cellEdgeOpacityDrift(boardIndex: boardIndex, cellIndex: index))
-        let baseStrokeOpacity = isFocused ? 0.42 : 0.21
-        let strokeOpacity = min(1, CGFloat(baseStrokeOpacity * edgeTone))
-
-        return Button {
+        Button {
             guard !cellDisabled(at: index) else { return }
             onSelectCell(index)
         } label: {
             ZStack {
-                RoundedRectangle(cornerRadius: SGRadius.sm - 2, style: .continuous)
-                    .fill(cellFill)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: SGRadius.sm - 2, style: .continuous)
-                            .strokeBorder(cellStrokeColor(opacity: strokeOpacity), lineWidth: 0.6)
-                    )
-
+                Color.clear.contentShape(Rectangle())
                 CellMarkReveal(
                     boardIndex: boardIndex,
                     cellIndex: index,
-                    mark: board.cells[index].mark
+                    mark: board.cells[index].mark,
+                    sessionTotalMoves: sessionTotalMoves
                 )
-                .minimumScaleFactor(0.6)
+                .minimumScaleFactor(0.56)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(SGSpacing.xs)
+                .padding(2)
             }
             .aspectRatio(1, contentMode: .fit)
         }
         .buttonStyle(HandInkRippleBoardCellStyle())
         .disabled(cellDisabled(at: index))
-        .opacity(cellDisabled(at: index) ? 0.38 : 1)
-    }
-
-    private func cellStrokeColor(opacity: CGFloat) -> Color {
-        switch themeMode {
-        case .light:
-            return SGColors.borderLightWarm.opacity(opacity * 1.05)
-        case .dark:
-            return SGColors.borderDark.opacity(opacity)
-        }
-    }
-
-    private var cellFill: Color {
-        switch themeMode {
-        case .light:
-            return isFocused
-                ? SGColors.paperSurfaceLight.opacity(0.62)
-                : SGColors.paperBackgroundLight.opacity(0.38)
-        case .dark:
-            return isFocused ? SGColors.surfaceLight.opacity(0.068) : SGColors.surfaceDark.opacity(0.33)
-        }
+        .opacity(cellDisabled(at: index) ? 0.42 : 1)
     }
 
     private func cellDisabled(at index: Int) -> Bool {
         !permitsCellPlacement(index)
     }
 
-    private var boardTiltDegrees: Double {
-        let table: [Double] = [-0.48, 0.41, -0.32, 0.51, -0.40, 0.36, -0.52, 0.33]
-        return table[boardIndex % table.count]
-    }
-
     private var boardSheetOpacity: Double {
-        let table: [Double] = [1.0, 0.958, 0.976, 0.939, 0.966, 0.951, 0.982, 0.943]
+        let table: [Double] = [1.0, 0.968, 0.982, 0.956, 0.976, 0.962, 0.988, 0.954]
         return table[boardIndex % table.count]
     }
 }
@@ -146,26 +113,39 @@ private struct CellMarkReveal: View {
     let boardIndex: Int
     let cellIndex: Int
     let mark: Mark
+    let sessionTotalMoves: Int
     @State private var inkScale: CGFloat = 1
     @State private var inkOpacity: Double = 1
+    /// Zaključava broj poteza u trenutku punjenja ćelije — varijanta oznake ne mijenja se pri kasnijim potezima drugdje.
+    @State private var placementMoveOrdinal: Int?
 
-    /// Sporiji talas — mastilo koje upija u papir (**0.28** s).
     private static let pulseDuration: CGFloat = 0.28
 
     var body: some View {
-        MarkGlyphView(mark: mark, boardIndex: boardIndex, cellIndex: cellIndex)
+        MarkGlyphView(mark: mark, boardIndex: boardIndex, cellIndex: cellIndex, placementMoveOrdinal: placementMoveOrdinal)
             .scaleEffect(mark == .empty ? 1 : inkScale)
             .opacity(mark == .empty ? 1 : inkOpacity)
             .onChange(of: mark) { old, new in
-                guard old == .empty, new != .empty else { return }
-                inkScale = 0.95
-                inkOpacity = 0.88
-                withAnimation(.easeOut(duration: Self.pulseDuration)) {
-                    inkScale = 1
-                    inkOpacity = 1
+                if old == .empty, new != .empty {
+                    if placementMoveOrdinal == nil {
+                        placementMoveOrdinal = sessionTotalMoves
+                    }
+                    inkScale = 0.95
+                    inkOpacity = 0.88
+                    withAnimation(.easeOut(duration: Self.pulseDuration)) {
+                        inkScale = 1
+                        inkOpacity = 1
+                    }
+                    return
+                }
+                if new == .empty {
+                    placementMoveOrdinal = nil
                 }
             }
             .onAppear {
+                if mark != .empty, placementMoveOrdinal == nil {
+                    placementMoveOrdinal = sessionTotalMoves
+                }
                 if mark != .empty {
                     inkScale = 1
                     inkOpacity = 1
@@ -173,4 +153,3 @@ private struct CellMarkReveal: View {
             }
     }
 }
-

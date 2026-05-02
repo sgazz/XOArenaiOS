@@ -4,16 +4,45 @@
 //
 
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
+
+/// Propagacija: u iPhone landscape sakriven je DEBUG trailing toolbar (po želji ostaje samo back).
+private struct MinimalGameTrailingToolbarPreferenceKey: PreferenceKey {
+    static let defaultValue: Bool = false
+    static func reduce(value: inout Bool, nextValue: () -> Bool) {
+        value = nextValue()
+    }
+}
 
 struct GameView: View {
+#if DEBUG
+    /// **`true`**: poluprozirni okviri (cela scena, safe area, zona grida, tap oblasti tabla). U produkciji ostaje **`false`**.
+    static var showLayoutDebugFrames = false
+#endif
+
     @Bindable var viewModel: GameViewModel
     @Environment(\.sgThemeMode) private var themeMode
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @State private var hideTrailingDebugToolbarChrome = false
 
     private var t: XOTheme.Tokens { XOTheme.tokens(for: themeMode) }
 
+    private static var userInterfaceIsPad: Bool {
+#if os(iOS)
+        UIDevice.current.userInterfaceIdiom == .pad
+#else
+        false
+#endif
+    }
+
     var body: some View {
         GeometryReader { proxy in
+            let hideTrail = GameView.toolbarTrailingHiddenForOrientation(proxy)
+
             ZStack {
                 PaperBackgroundView()
                     .ignoresSafeArea()
@@ -22,11 +51,13 @@ struct GameView: View {
                 let metrics = layoutMetrics(
                     in: proxy,
                     showLearningStrip: showLearningStrip,
-                    dynamicTypeBonus: learningStripReserveBonus(for: dynamicTypeSize)
+                    dynamicTypeBonus: learningStripReserveBonus(for: dynamicTypeSize),
+                    horizontalSizeClass: horizontalSizeClass,
+                    verticalSizeClass: verticalSizeClass
                 )
 
                 VStack(spacing: metrics.contentSpacing) {
-                    header(compact: metrics.compactHeader)
+                    gameInformationHeader(metrics: metrics)
                         .frame(height: metrics.headerHeight, alignment: .top)
 
                     if showLearningStrip {
@@ -39,27 +70,50 @@ struct GameView: View {
                     }
 
                     boardsGrid(metrics: metrics)
-                        .frame(maxHeight: .infinity, alignment: .top)
-
-                    if viewModel.isSessionComplete {
-                        SessionCompletionPanel(
-                            stats: viewModel.stats,
-                            reason: viewModel.completionReason ?? .timeExpired,
-                            gameMode: viewModel.gameMode,
-                            learningProfile: viewModel.gameMode == .learning ? viewModel.learningProfile : nil,
-                            onPlayAgain: { viewModel.resetGame() },
-                            compact: metrics.compactPanel
-                        )
-                        .frame(height: metrics.completionHeight)
-                        .id("complete-\(viewModel.stats.totalMoves)-\(viewModel.stats.boardDraws)")
-                    }
+                        .frame(maxHeight: .infinity, alignment: .center)
                 }
                 .padding(.horizontal, metrics.horizontalPadding)
                 .padding(.top, metrics.topPadding)
                 .padding(.bottom, metrics.bottomPadding)
+
+                Group {
+                    if viewModel.sessionState == .completed {
+                        SessionCompletionModal(
+                            stats: viewModel.stats,
+                            reason: viewModel.completionReason ?? .timeExpired,
+                            gameMode: viewModel.gameMode,
+                            learningProfile: viewModel.gameMode == .learning ? viewModel.learningProfile : nil,
+                            onPlayAgain: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    viewModel.resetGame()
+                                }
+                            }
+                        )
+                        .transition(.opacity)
+                        .zIndex(50)
+                        .id("completion-modal-\(viewModel.stats.totalMoves)-\(viewModel.stats.boardDraws)")
+                    }
+                }
+                .animation(.easeInOut(duration: 0.2), value: viewModel.sessionState)
+#if DEBUG
+                if GameView.showLayoutDebugFrames {
+                    GameLayoutDebugOverlay(
+                        containerSize: proxy.size,
+                        safeInsets: proxy.safeAreaInsets,
+                        metrics: metrics,
+                        showsLearningStrip: showLearningStrip,
+                        columnCount: metrics.columns,
+                        rowCount: metrics.rows
+                    )
+                    .allowsHitTesting(false)
+                    .zIndex(100)
+                }
+#endif
             }
             .allowsHitTesting(true)
+            .preference(key: MinimalGameTrailingToolbarPreferenceKey.self, value: hideTrail)
         }
+        .onPreferenceChange(MinimalGameTrailingToolbarPreferenceKey.self) { hideTrailingDebugToolbarChrome = $0 }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
@@ -68,94 +122,122 @@ struct GameView: View {
         .onDisappear {
             viewModel.onGameViewDisappear()
         }
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                SGThemeToggleControl()
-            }
-            ToolbarItem(placement: .principal) {
 #if DEBUG
-                Group {
-                    if showAIDebugPrincipalToolbar {
-                        aiDebugToolbarPrincipalBody
-                    } else {
-                        gameNavTitleBarLabel
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if viewModel.gameMode == .aiVsAI, !hideTrailingDebugToolbarChrome {
+                    Menu {
+                        ForEach(AIDebugDelayPreset.allCases, id: \.self) { preset in
+                            Button(preset.rawValue.capitalized) {
+                                viewModel.aiVsAIDelayPreset = preset
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "gauge.with.dots.needle.67percent")
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(t.textSecondary)
                     }
+                    .accessibilityLabel("AI vs AI pacing")
                 }
-#else
-                gameNavTitleBarLabel
-#endif
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Reset") {
-                    viewModel.resetGame()
-                }
-                .font(SGTypography.small)
-                .foregroundStyle(t.textPrimary)
-                .sgEngravedText(intensity: .low, color: t.textPrimary)
             }
         }
+#endif
         .sgToolbarStyle()
     }
 
-#if DEBUG
-    private var showAIDebugPrincipalToolbar: Bool {
-        viewModel.gameMode == .vsAI || viewModel.gameMode == .aiVsAI
+    /// iPhone landscape: bez trailing DEBUG kontrola (**back** ostaje sistemski uz safe area).
+    private static func toolbarTrailingHiddenForOrientation(_ proxy: GeometryProxy) -> Bool {
+        let w = proxy.size.width
+        let h = proxy.size.height
+        let isLandscape = w > h
+        return !userInterfaceIsPad && isLandscape
     }
 
-    @ViewBuilder
-    private var aiDebugToolbarPrincipalBody: some View {
-        VStack(spacing: 6) {
-            if viewModel.gameMode == .aiVsAI {
-                Picker("Speed", selection: Binding(
-                    get: { viewModel.aiVsAIDelayPreset },
-                    set: { viewModel.aiVsAIDelayPreset = $0 }
-                )) {
-                    ForEach(AIDebugDelayPreset.allCases, id: \.self) { preset in
-                        Text(preset.rawValue.capitalized).tag(preset)
+    // MARK: - Minimal hero (samo vidljivi timer; hod samo u accessibility)
+
+    private func gameInformationHeader(metrics: GameLayoutMetrics) -> some View {
+        Text(viewModel.formattedRemainingTime)
+            .font(heroTimerFont(metrics: metrics))
+            .foregroundStyle(timerHeroInk)
+            .monospacedDigit()
+            .multilineTextAlignment(.center)
+            .minimumScaleFactor(0.75)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .sgEngravedText(intensity: .high, color: timerHeroInk)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(heroAccessibilitySummary)
+            .accessibilityActions {
+                Button("Reset game") {
+                    viewModel.resetGame()
+                }
+                if aiDifficultyBadgeVisible {
+                    Button("Change AI difficulty") {
+                        cycleAIDifficultyTap()
                     }
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .accessibilityLabel("AI vs AI pacing")
-                .accessibilityHint("Slows or speeds automatic moves for debugging.")
             }
-            Picker("AI difficulty", selection: Binding(
-                get: { viewModel.aiDifficulty },
-                set: { viewModel.aiDifficulty = $0 }
-            )) {
-                ForEach(AIDifficulty.allCases, id: \.self) { level in
-                    Text(level.rawValue.capitalized).tag(level)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .accessibilityLabel("AI difficulty")
-            .accessibilityHint("Easy random, medium mix, hard minimax.")
+    }
+
+    /// VoiceOver: hod, vreme, AI težina; reset / težina i dalje preko akcija.
+    private var heroAccessibilitySummary: String {
+        var parts: [String] = [heroTurnLine, "Time \(viewModel.formattedRemainingTime)"]
+        if aiDifficultyBadgeVisible {
+            parts.append("AI \(capitalizeAIDifficultyRaw(viewModel.aiDifficulty.rawValue)) difficulty")
+        } else if viewModel.gameMode == .localDuel {
+            parts.append("Two players")
         }
+        if !viewModel.isSessionComplete {
+            parts.append("Actions: reset game or change AI difficulty")
+        }
+        return parts.joined(separator: ". ")
     }
+
+    private var heroTurnLine: String {
+        guard viewModel.sessionState == .playing else {
+            return viewModel.sessionState == .completed ? "Session finished" : "Ready"
+        }
+        return viewModel.currentMark == .x ? "X to play" : "O to play"
+    }
+
+    private var timerHeroInk: Color {
+        let urgency = viewModel.remainingSeconds <= 10 && viewModel.sessionState == .playing
+        return urgency ? t.accent : t.textPrimary
+    }
+
+    private func heroTimerFont(metrics: GameLayoutMetrics) -> Font {
+        Font.system(size: metrics.heroTimerFontSize, design: .rounded).weight(.semibold)
+    }
+
+    private func capitalizeAIDifficultyRaw(_ raw: String) -> String {
+        guard let first = raw.first else { return raw }
+        return String(first.uppercased() + raw.dropFirst())
+    }
+
+    private var aiDifficultyBadgeVisible: Bool {
+#if DEBUG
+        if viewModel.gameMode == .aiVsAI { return true }
 #endif
-
-    private var navigationScreenTitleKey: String {
-        viewModel.gameMode == .learning ? "Learning" : "Session"
+        return viewModel.gameMode == .vsAI || viewModel.gameMode == .learning
     }
 
-    private var gameNavTitleBarLabel: some View {
-        Text(navigationScreenTitleKey)
-            .font(SGTypography.body)
-            .fontWeight(.semibold)
-            .foregroundStyle(t.textPrimary)
-            .sgEngravedText(intensity: .medium, color: t.textPrimary)
-            .accessibilityLabel(navigationScreenTitleKey)
-            .accessibilityAddTraits(.isHeader)
+    private func cycleAIDifficultyTap() {
+        let order = AIDifficulty.allCases
+        guard let i = order.firstIndex(of: viewModel.aiDifficulty) else { return }
+        let next = order[(i + 1) % order.count]
+        viewModel.aiDifficulty = next
+        HapticService.lightImpact()
     }
+
+    // MARK: - Boards
 
     private func boardsGrid(metrics: GameLayoutMetrics) -> some View {
         let columns: [GridItem] = Array(
-            repeating: GridItem(.fixed(metrics.boardSize), spacing: metrics.boardGap),
+            repeating: GridItem(.fixed(metrics.boardSize), spacing: metrics.boardGapHorizontal),
             count: metrics.columns
         )
 
-        return LazyVGrid(columns: columns, spacing: metrics.boardGap) {
+        return LazyVGrid(columns: columns, spacing: metrics.boardGapVertical) {
             ForEach(Array(viewModel.boards.enumerated()), id: \.offset) { index, board in
                 CompactBoardGrid(
                     boardIndex: index,
@@ -167,79 +249,17 @@ struct GameView: View {
                     onSelectCell: { cell in
                         viewModel.makeMove(boardIndex: index, cellIndex: cell)
                     },
-                    boardSize: metrics.boardSize
+                    boardSize: metrics.boardSize,
+                    sessionTotalMoves: viewModel.stats.totalMoves,
+                    focusedScaleBoost: metrics.focusedBoardScaleBoost,
+                    unfocusedOpacityFactor: metrics.inactiveBoardOpacityFactor
                 )
             }
         }
         .frame(maxWidth: .infinity)
     }
 
-    private func header(compact: Bool) -> some View {
-        VStack(alignment: .leading, spacing: compact ? SGSpacing.xs : SGSpacing.sm) {
-            HStack(alignment: .firstTextBaseline, spacing: SGSpacing.sm) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(viewModel.turnLabelPrimary)
-                        .font(compact ? SGTypography.small : SGTypography.body)
-                        .tracking(compact ? 0.5 : SGTypography.subtitleTracking)
-                        .foregroundStyle(t.textPrimary)
-                        .sgEngravedText(intensity: .medium, color: t.textPrimary)
-                    Text("Play until time runs out.")
-                        .font(SGTypography.small)
-                        .foregroundStyle(t.textSecondary.opacity(0.82))
-                        .tracking(0.25)
-                    if let whisper = viewModel.aiWhisperLine, !whisper.isEmpty {
-                        Text(whisper)
-                            .font(SGTypography.small)
-                            .foregroundStyle(t.textSecondary.opacity(0.92))
-                            .tracking(0.3)
-                    }
-                }
-                Spacer(minLength: SGSpacing.sm)
-                timerChip
-            }
-
-            HStack(spacing: compact ? SGSpacing.xs : SGSpacing.sm) {
-                statChip(title: "Board", value: "\(viewModel.activeBoardIndex + 1)/\(GameConstants.boardCount)")
-                statChip(title: "Starter", value: viewModel.activeBoardStarter == .x ? "X" : "O")
-                statChip(title: "Moves", value: "\(viewModel.stats.totalMoves)")
-                statChip(title: "X", value: "\(viewModel.stats.xBoardWins)")
-                statChip(title: "O", value: "\(viewModel.stats.oBoardWins)")
-                statChip(title: "D", value: "\(viewModel.stats.boardDraws)")
-            }
-            .lineLimit(1)
-            .minimumScaleFactor(0.75)
-        }
-    }
-
-    private func statChip(title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(title.uppercased())
-                .font(SGTypography.small)
-                .foregroundStyle(t.textSecondary.opacity(0.9))
-                .tracking(1.05)
-            Text(value)
-                .font(SGTypography.small)
-                .fontWeight(.semibold)
-                .foregroundStyle(t.textPrimary)
-                .sgEngravedText(intensity: .low, color: t.textPrimary)
-        }
-        .padding(.trailing, SGSpacing.xs)
-    }
-
-    private var timerChip: some View {
-        let urgency = viewModel.remainingSeconds <= 10 && viewModel.sessionState == .playing
-        let ink = urgency ? t.accent : t.textPrimary
-        return Text(viewModel.formattedRemainingTime)
-            .font(SGTypography.small)
-            .fontWeight(.semibold)
-            .monospacedDigit()
-            .foregroundStyle(ink)
-            .sgEngravedText(intensity: .medium, color: ink)
-            .padding(.leading, SGSpacing.sm)
-            .accessibilityLabel("Time remaining \(viewModel.formattedRemainingTime)")
-    }
-
-    /// Extra vertical reservation for Learning strip when Dynamic Type grows (layout-only; typography in strip stays fixed-sized).
+    /// Extra vertical reservation for Learning strip when Dynamic Type grows (layout-only).
     private func learningStripReserveBonus(for dynamicTypeSize: DynamicTypeSize) -> CGFloat {
         switch dynamicTypeSize {
         case .accessibility1, .accessibility2: return 14
@@ -251,46 +271,61 @@ struct GameView: View {
     private func layoutMetrics(
         in proxy: GeometryProxy,
         showLearningStrip: Bool,
-        dynamicTypeBonus: CGFloat
+        dynamicTypeBonus: CGFloat,
+        horizontalSizeClass: UserInterfaceSizeClass?,
+        verticalSizeClass: UserInterfaceSizeClass?
     ) -> GameLayoutMetrics {
         let insets = proxy.safeAreaInsets
         let width = proxy.size.width
         let height = proxy.size.height
-        let isPhoneSized = width < 700
-        let isLandscapePhone = isPhoneSized && width > height
+        let isLandscape = width > height
+        let isPad = Self.userInterfaceIsPad
+        let isPhone = !isPad
+        let isLandscapePhone = isPhone && isLandscape
 
-        let horizontalPadding: CGFloat = width >= 700 ? SGSpacing.xl : SGSpacing.md
-        let topPadding: CGFloat = SGSpacing.sm
-        let bottomPadding: CGFloat = max(SGSpacing.md, insets.bottom * 0.45)
+        /// Horizontalno: leading/trailing safe area (ostrva, split view, zakrivljenje).
+        let usableWidth = width - insets.leading - insets.trailing
 
-        var contentSpacing: CGFloat = width >= 700 ? SGSpacing.md : SGSpacing.sm
+        /// U multitask-u iPad dobija **`compact`** po širini — blaži raspored kao na užem platnu.
+        let isPadCompactWidth =
+            isPad && (usableWidth < 520 || horizontalSizeClass == .some(.compact))
+
+        let horizontalPadding: CGFloat = {
+            if isPad {
+                if isPadCompactWidth { return SGSpacing.lg }
+                return isLandscape ? SGSpacing.xl : SGSpacing.xl + SGSpacing.sm
+            }
+            if isLandscapePhone { return SGSpacing.sm + SGSpacing.xs }
+            /// iPhone portrait: mali unutrašnji inset (ukupno ~**20** pt) + **leading/trailing** iz `usableWidth` radi **~28–36** pt tipično do ivice ekrana zajedno sa safe area.
+            return CGFloat(10)
+        }()
+        let topPadding: CGFloat = SGSpacing.xs + 2
+        let bottomPadding: CGFloat = max(SGSpacing.sm, insets.bottom * 0.38)
+
+        var contentSpacing: CGFloat = {
+            guard isPad else { return SGSpacing.sm }
+            if isPadCompactWidth { return SGSpacing.sm + 2 }
+            return SGSpacing.sm + SGSpacing.sm
+        }()
+        if !showLearningStrip && isPhone {
+            contentSpacing = min(contentSpacing, SGSpacing.sm)
+        }
         if showLearningStrip && isLandscapePhone {
             contentSpacing = SGSpacing.xs
         }
 
-        let learningCompletionStripe: CGFloat = {
-            guard viewModel.isSessionComplete, viewModel.gameMode == .learning else { return 0 }
-            return width >= 700 ? 52 : 48
-        }()
-        /// Fixed slot under the eight boards (`ScrollView`-free): sized for recap + **`Play Again`**.
-        let completionHeight: CGFloat = {
-            guard viewModel.isSessionComplete else { return 0 }
-            let base: CGFloat = width >= 700 ? 192 : 166
-            return base + learningCompletionStripe
-        }()
-
         let headerHeight: CGFloat = {
-            if width >= 700 { return 94 }
-            // Short vertical space: compact stats row, still enough for chips + timer without clipping fixed frame.
-            if isLandscapePhone && showLearningStrip { return 76 }
-            if isLandscapePhone { return 74 }
-            return 76
+            if isPad {
+                return isLandscape ? (isPadCompactWidth ? 48 : 54) : 52
+            }
+            if isLandscapePhone && showLearningStrip { return 42 }
+            if isLandscapePhone { return 42 }
+            return 44
         }()
 
-        // Reserve aligns with intrinsic strip height (~5 compact text lines + bar + pad) — prevents grid/str overlap on short screens.
         let learningStripHeight: CGFloat = {
             guard showLearningStrip else { return 0 }
-            if width >= 700 {
+            if isPad {
                 return 101 + dynamicTypeBonus * 0.55
             }
             if isLandscapePhone {
@@ -300,49 +335,354 @@ struct GameView: View {
         }()
 
         let learningExtraSpacing: CGFloat = showLearningStrip ? contentSpacing : 0
-        let boardGap = width >= 700 ? SGSpacing.md : SGSpacing.sm
 
-        /// iPhone portrait: **2 × 4**; iPad: **4 × 2** — non-negotiable for this sprint.
-        let columnsCount = width >= 700 ? 4 : 2
+        let columnsCount: Int
+        let rowsCount: Int
+        /// Matrix: iPhone portrait **2×4** — iPhone landscape **4×2** — iPad **4×2** ili u landscape (**8×1** samo ako su tablite dovoljno velike vs 4×2).
+        if isLandscapePhone {
+            columnsCount = 4
+            rowsCount = 2
+        } else if isPhone {
+            columnsCount = 2
+            rowsCount = 4
+        } else {
+            columnsCount = 4
+            rowsCount = 2
+        }
 
-        let availableWidth = width - (horizontalPadding * 2)
-        let availableHeight =
+        let shortestSidePoints = min(width, height)
+        let widestSidePoints = max(width, height)
+
+        let focusBoost: CGFloat = {
+            if isPad { return 1.028 }
+            if shortestSidePoints < 391 { return 1.02 }
+            return 1.026
+        }()
+        let inactiveOpacityMul: CGFloat = 0.9
+
+        let compactHeaderVisual =
+            shortestSidePoints < 400 || isLandscapePhone
+            || (isPadCompactWidth && (verticalSizeClass == .some(.compact) || widestSidePoints < 900))
+
+        let heroTimerFontSize: CGFloat = {
+            guard isPad else {
+                let base = compactHeaderVisual ? CGFloat(43) : CGFloat(46)
+                return min(CGFloat(48), max(CGFloat(42), base))
+            }
+            var s = max(CGFloat(48), min(CGFloat(56), isLandscape ? CGFloat(52) : CGFloat(54)))
+            if isPadCompactWidth { s -= 4 }
+            return min(CGFloat(56), max(CGFloat(48), s))
+        }()
+
+        let availableWidth = max(1, usableWidth - horizontalPadding * 2)
+
+        let availableHeightBoardsRegion =
             height - insets.top - bottomPadding - topPadding - headerHeight - learningStripHeight
-            - learningExtraSpacing - contentSpacing - completionHeight
+            - learningExtraSpacing - contentSpacing
 
-        let chosen = boardSize(
-            for: availableWidth,
-            availableHeight: availableHeight,
-            columns: columnsCount,
-            rows: GameConstants.boardCount / columnsCount,
-            gap: boardGap
-        )
+        let layout: (boardSize: CGFloat, gapHorizontal: CGFloat, gapVertical: CGFloat)
+        var gridColumns = columnsCount
+        var gridRows = rowsCount
+
+        if isLandscapePhone {
+            layout = resolvedIPhoneLandscapeFourByTwoBoardLayout(
+                availableWidth: availableWidth,
+                boardsRegionHeight: availableHeightBoardsRegion,
+                portraitShortSide: shortestSidePoints
+            )
+        } else if isPad && isLandscape {
+            let picked = resolvedIPadLandscapeGridEightOrFour(
+                availableWidth: availableWidth,
+                availableHeight: availableHeightBoardsRegion,
+                padShortSide: shortestSidePoints,
+                padLongSide: widestSidePoints,
+                ipadCompactWidthLayout: isPadCompactWidth
+            )
+            gridColumns = picked.columns
+            gridRows = picked.rows
+            layout = picked.layout
+        } else if isPad {
+            layout = resolvedPadBoardGridLayout(
+                availableWidth: availableWidth,
+                availableHeight: availableHeightBoardsRegion,
+                columns: 4,
+                rows: 2,
+                padShortSide: shortestSidePoints,
+                padLongSide: widestSidePoints,
+                ipadCompactWidthLayout: isPadCompactWidth
+            )
+        } else {
+            layout = resolvedIPhonePortraitTwoByFourBoardGridLayout(
+                availableWidth: availableWidth,
+                availableHeight: availableHeightBoardsRegion
+            )
+        }
 
         return GameLayoutMetrics(
-            columns: chosen.0,
-            rows: chosen.1,
-            boardSize: chosen.2,
-            boardGap: boardGap,
+            columns: gridColumns,
+            rows: gridRows,
+            boardSize: layout.boardSize,
+            boardGapHorizontal: layout.gapHorizontal,
+            boardGapVertical: layout.gapVertical,
             horizontalPadding: horizontalPadding,
             topPadding: topPadding,
             bottomPadding: bottomPadding,
             contentSpacing: contentSpacing,
-            completionHeight: completionHeight,
             headerHeight: headerHeight,
-            compactHeader: width < 400 || isLandscapePhone,
-            compactPanel: width < 430,
-            compactLearningStripLayout: isLandscapePhone && showLearningStrip
+            heroTimerFontSize: heroTimerFontSize,
+            learningStripOccupiedHeight: showLearningStrip ? learningStripHeight : 0,
+            compactHeader: compactHeaderVisual,
+            compactLearningStripLayout: isLandscapePhone && showLearningStrip,
+            focusedBoardScaleBoost: focusBoost,
+            inactiveBoardOpacityFactor: inactiveOpacityMul
         )
     }
 
-    private func boardSize(for width: CGFloat, availableHeight: CGFloat, columns: Int, rows: Int, gap: CGFloat) -> (Int, Int, CGFloat) {
-        let widthBased = (width - CGFloat(columns - 1) * gap) / CGFloat(columns)
-        let heightBased = (availableHeight - CGFloat(rows - 1) * gap) / CGFloat(rows)
-        return (columns, rows, floor(min(widthBased, heightBased)))
+    /// iPad landscape: pref. **4×2** — **8×1** ako je **`boardSize`** jasno veći od 4×2 i ≥ ~170 pt.
+    private func resolvedIPadLandscapeGridEightOrFour(
+        availableWidth: CGFloat,
+        availableHeight: CGFloat,
+        padShortSide: CGFloat,
+        padLongSide: CGFloat,
+        ipadCompactWidthLayout: Bool
+    ) -> (columns: Int, rows: Int, layout: (boardSize: CGFloat, gapHorizontal: CGFloat, gapVertical: CGFloat)) {
+        let layoutFour = resolvedPadBoardGridLayout(
+            availableWidth: availableWidth,
+            availableHeight: availableHeight,
+            columns: 4,
+            rows: 2,
+            padShortSide: padShortSide,
+            padLongSide: padLongSide,
+            ipadCompactWidthLayout: ipadCompactWidthLayout
+        )
+        if ipadCompactWidthLayout {
+            return (4, 2, layoutFour)
+        }
+        let layoutEight = resolvedPadBoardGridLayout(
+            availableWidth: availableWidth,
+            availableHeight: availableHeight,
+            columns: 8,
+            rows: 1,
+            padShortSide: padShortSide,
+            padLongSide: padLongSide,
+            ipadCompactWidthLayout: ipadCompactWidthLayout
+        )
+
+        let eightLargeEnough = layoutEight.boardSize >= 170 && layoutEight.boardSize > layoutFour.boardSize + 8
+        if eightLargeEnough {
+            return (8, 1, layoutEight)
+        }
+        return (4, 2, layoutFour)
+    }
+
+    /// iPhone landscape (**4 × 2**): `boardSize = min(byWidth, byHeight)` uz clamp 72…max; **`gapVertical`** 36…52.
+    private func resolvedIPhoneLandscapeFourByTwoBoardLayout(
+        availableWidth: CGFloat,
+        boardsRegionHeight: CGFloat,
+        portraitShortSide: CGFloat
+    ) -> (boardSize: CGFloat, gapHorizontal: CGFloat, gapVertical: CGFloat) {
+        let columns = 4
+        let rows = 2
+        let gapVMin: CGFloat = 36
+        let gapVMax: CGFloat = 52
+        let minBoard: CGFloat = 72
+        let H = max(1, boardsRegionHeight)
+
+        let maxBoard: CGFloat = {
+            if portraitShortSide <= 376 { return 120 }
+            if portraitShortSide <= 390 { return 128 }
+            if portraitShortSide <= 414 { return 138 }
+            if portraitShortSide <= 430 { return 144 }
+            return 150
+        }()
+
+        let gapHorizontal = max(16, min(28, availableWidth * 0.028))
+
+        let boardFromWidth = floor((availableWidth - CGFloat(columns - 1) * gapHorizontal) / CGFloat(columns))
+        let boardFromHeightAtMinGap = floor((H - gapVMin) / CGFloat(rows))
+
+        var boardSize = min(boardFromWidth, boardFromHeightAtMinGap)
+        boardSize = min(maxBoard, max(minBoard, boardSize))
+
+        var gapVertical = (H - CGFloat(rows) * boardSize) / CGFloat(rows - 1)
+        if gapVertical < gapVMin {
+            boardSize = floor((H - CGFloat(rows - 1) * gapVMin) / CGFloat(rows))
+            boardSize = min(maxBoard, max(minBoard, min(boardFromWidth, boardSize)))
+            gapVertical = gapVMin
+        } else if gapVertical > gapVMax {
+            gapVertical = gapVMax
+            boardSize = floor((H - CGFloat(rows - 1) * gapVertical) / CGFloat(rows))
+            boardSize = min(maxBoard, max(minBoard, min(boardFromWidth, boardSize)))
+            gapVertical = (H - CGFloat(rows) * boardSize) / CGFloat(rows - 1)
+            gapVertical = min(gapVMax, max(gapVMin, gapVertical))
+        } else {
+            gapVertical = min(gapVMax, max(gapVMin, gapVertical))
+        }
+
+        var heightCap =
+            floor((H - CGFloat(rows - 1) * gapVertical) / CGFloat(rows))
+        boardSize = min(boardSize, heightCap)
+        boardSize = min(boardFromWidth, max(minBoard, min(maxBoard, boardSize)))
+
+        gapVertical = (H - CGFloat(rows) * boardSize) / CGFloat(rows - 1)
+        gapVertical = min(gapVMax, max(gapVMin, gapVertical))
+
+        while CGFloat(rows) * boardSize + CGFloat(rows - 1) * gapVertical > H + 0.5 && boardSize > minBoard {
+            boardSize -= 1
+            gapVertical = (H - CGFloat(rows) * boardSize) / CGFloat(rows - 1)
+            gapVertical = min(gapVMax, max(gapVMin, gapVertical))
+        }
+        heightCap = floor((H - CGFloat(rows - 1) * gapVertical) / CGFloat(rows))
+        boardSize = min(boardSize, heightCap)
+
+        return (boardSize, gapHorizontal, gapVertical)
+    }
+
+    /// iPad tabla: **`max`** **170–220** pt po klasi uređaja; multitask uža kolona blago smanjuje plafon.
+    private func ipadMaxBoardClamp(
+        padShortSide: CGFloat,
+        padLongSide: CGFloat,
+        ipadCompactWidthLayout: Bool
+    ) -> CGFloat {
+        let span = Swift.min(CGFloat(1400), padLongSide)
+        var cap =
+            Swift.min(CGFloat(220), Swift.max(CGFloat(170), padShortSide * 0.27 + span * 0.015))
+        if ipadCompactWidthLayout { cap -= 18 }
+        return Swift.min(CGFloat(220), Swift.max(CGFloat(170), cap))
+    }
+
+    /// iPad: **`gap`** H **48–72**, V **48–80** (**8×1** koristi **`gapVertical == 0`**).
+    private func resolvedPadBoardGridLayout(
+        availableWidth: CGFloat,
+        availableHeight: CGFloat,
+        columns: Int,
+        rows: Int,
+        padShortSide: CGFloat,
+        padLongSide: CGFloat,
+        ipadCompactWidthLayout: Bool
+    ) -> (boardSize: CGFloat, gapHorizontal: CGFloat, gapVertical: CGFloat) {
+        let AW = Swift.max(CGFloat(1), availableWidth)
+        let AH = Swift.max(CGFloat(1), availableHeight)
+        let maxBoardPt = ipadMaxBoardClamp(
+            padShortSide: padShortSide,
+            padLongSide: padLongSide,
+            ipadCompactWidthLayout: ipadCompactWidthLayout
+        )
+
+        let gapFloorH: CGFloat = ipadCompactWidthLayout ? 42 : 48
+        let gapHorizontal = Swift.max(
+            gapFloorH,
+            Swift.min(CGFloat(72), AW * 0.064 + CGFloat(38))
+        )
+
+        guard rows > 1 else {
+            let rawW =
+                floor((AW - CGFloat(max(0, columns - 1)) * gapHorizontal) / CGFloat(max(1, columns)))
+            let rawH = floor(AH)
+            let minFloorPad: CGFloat = ipadCompactWidthLayout ? 100 : 120
+            var boardSize = floor(Swift.min(rawW, rawH))
+            boardSize = Swift.min(maxBoardPt, Swift.max(minFloorPad, boardSize))
+            boardSize = Swift.min(boardSize, floor(AH))
+            return (boardSize, gapHorizontal, 0)
+        }
+
+        let gapVMin = ipadCompactWidthLayout ? CGFloat(44) : CGFloat(48)
+        let gapVMax = ipadCompactWidthLayout ? CGFloat(72) : CGFloat(80)
+        let minPreferredCell = ipadCompactWidthLayout ? CGFloat(118) : CGFloat(140)
+
+        let boardFromWidth = floor((AW - CGFloat(columns - 1) * gapHorizontal) / CGFloat(columns))
+
+        let slackAfterWidthFit = AH - CGFloat(rows) * boardFromWidth
+        let gapVRaw = slackAfterWidthFit / CGFloat(rows - 1)
+
+        let boardSizeRaw: CGFloat
+        var gapVertical: CGFloat
+
+        if gapVRaw >= gapVMin {
+            boardSizeRaw = boardFromWidth
+            gapVertical = Swift.min(gapVRaw, gapVMax)
+            if gapVertical < gapVMin { gapVertical = gapVMin }
+        } else {
+            let boardFromHeight = floor(
+                (AH - CGFloat(rows - 1) * gapVMin) / CGFloat(rows))
+            let widthLimited = Swift.min(boardFromWidth, boardFromHeight)
+            boardSizeRaw = widthLimited
+            let slackForRows = AH - CGFloat(rows) * boardSizeRaw
+            let distributed = slackForRows / CGFloat(rows - 1)
+            gapVertical = Swift.min(gapVMax, Swift.max(gapVMin, distributed))
+        }
+
+        let widthCap =
+            floor((AW - CGFloat(columns - 1) * gapHorizontal) / CGFloat(columns))
+        let heightCapAtCurrentGap =
+            floor((AH - CGFloat(rows - 1) * gapVertical) / CGFloat(rows))
+        var cellMax = boardSizeRaw
+        cellMax = Swift.min(cellMax, heightCapAtCurrentGap)
+        cellMax = Swift.min(cellMax, widthCap)
+        cellMax = Swift.max(minPreferredCell, Swift.min(cellMax, maxBoardPt))
+        cellMax = Swift.max(CGFloat(72), cellMax)
+        return (cellMax, gapHorizontal, gapVertical)
+    }
+
+    /// iPhone portrait (**2×4**): širina **`(availableWidth − columnGap) / 2`** bez veštačkog cepa na 150 pt ako visina dozvoljava; blaži vertikalni raspon.
+    private func resolvedIPhonePortraitTwoByFourBoardGridLayout(
+        availableWidth: CGFloat,
+        availableHeight: CGFloat
+    ) -> (boardSize: CGFloat, gapHorizontal: CGFloat, gapVertical: CGFloat) {
+        let columns = 2
+        let rows = 4
+        let gapHorizontal =
+            Swift.max(CGFloat(16), Swift.min(CGFloat(24), availableWidth * CGFloat(0.038) + CGFloat(11)))
+        let gapVMin = CGFloat(24)
+        let gapVMax = CGFloat(46)
+        let minPreferredCell = CGFloat(120)
+        let boardByWidth =
+            floor((availableWidth - CGFloat(columns - 1) * gapHorizontal) / CGFloat(columns))
+
+        let slackAfterWidthFit = availableHeight - CGFloat(rows) * boardByWidth
+        let gapVRaw = slackAfterWidthFit / CGFloat(rows - 1)
+
+        let boardSeed: CGFloat
+        let gapVertical: CGFloat
+
+        if gapVRaw >= gapVMin {
+            boardSeed = boardByWidth
+            gapVertical = Swift.min(gapVRaw, gapVMax)
+        } else {
+            let boardFromHeight = floor(
+                (availableHeight - CGFloat(rows - 1) * gapVMin) / CGFloat(rows))
+            let widthLimited = Swift.min(boardByWidth, boardFromHeight)
+            boardSeed = widthLimited
+            let slackForRows = availableHeight - CGFloat(rows) * boardSeed
+            let distributed = slackForRows / CGFloat(rows - 1)
+            gapVertical = Swift.min(gapVMax, Swift.max(gapVMin, distributed))
+        }
+
+        let heightCapAtGap =
+            floor((availableHeight - CGFloat(rows - 1) * gapVertical) / CGFloat(rows))
+        let widthCeiling = Swift.min(CGFloat(172), boardByWidth)
+
+        var cellMax = Swift.min(Swift.max(minPreferredCell, boardSeed), heightCapAtGap)
+        cellMax = Swift.min(cellMax, widthCeiling)
+
+        while cellMax < boardByWidth && cellMax < widthCeiling {
+            let next = cellMax + 1
+            let hNeeded = CGFloat(rows) * next + CGFloat(rows - 1) * gapVertical
+            if hNeeded > availableHeight + CGFloat(0.5) { break }
+            cellMax = next
+        }
+
+        let hFinal = CGFloat(rows) * cellMax + CGFloat(rows - 1) * gapVertical
+        if hFinal > availableHeight + CGFloat(0.5) {
+            cellMax = floor((availableHeight - CGFloat(rows - 1) * gapVertical) / CGFloat(rows))
+            cellMax = Swift.max(minPreferredCell, Swift.min(cellMax, widthCeiling))
+        }
+
+        return (cellMax, gapHorizontal, gapVertical)
     }
 }
 
-// MARK: - Learning strip (Quiet System, compact)
+// MARK: - Learning strip
 
 private struct LearningModeStripView: View {
     let profile: LearningProfile
@@ -434,14 +774,82 @@ private struct GameLayoutMetrics {
     let columns: Int
     let rows: Int
     let boardSize: CGFloat
-    let boardGap: CGFloat
+    let boardGapHorizontal: CGFloat
+    let boardGapVertical: CGFloat
     let horizontalPadding: CGFloat
     let topPadding: CGFloat
     let bottomPadding: CGFloat
     let contentSpacing: CGFloat
-    let completionHeight: CGFloat
     let headerHeight: CGFloat
+    let heroTimerFontSize: CGFloat
+    let learningStripOccupiedHeight: CGFloat
     let compactHeader: Bool
-    let compactPanel: Bool
     let compactLearningStripLayout: Bool
+    let focusedBoardScaleBoost: CGFloat
+    let inactiveBoardOpacityFactor: CGFloat
 }
+
+#if DEBUG
+/// Opcioni pregled slojeva (samo ako je **`GameView.showLayoutDebugFrames == true`**).
+private struct GameLayoutDebugOverlay: View {
+    let containerSize: CGSize
+    let safeInsets: EdgeInsets
+    let metrics: GameLayoutMetrics
+    let showsLearningStrip: Bool
+    let columnCount: Int
+    let rowCount: Int
+
+    var body: some View {
+        let w = containerSize.width
+        let h = containerSize.height
+        ZStack(alignment: .topLeading) {
+            Rectangle()
+                .stroke(Color.red.opacity(0.5), lineWidth: 1.5)
+                .frame(width: w, height: h)
+
+            Rectangle()
+                .stroke(Color.blue.opacity(0.42), lineWidth: 1)
+                .frame(
+                    width: w - safeInsets.leading - safeInsets.trailing,
+                    height: h - safeInsets.top - safeInsets.bottom
+                )
+                .offset(x: safeInsets.leading, y: safeInsets.top)
+
+            let innerLeft = safeInsets.leading + metrics.horizontalPadding
+            let innerRight = safeInsets.trailing + metrics.horizontalPadding
+            Rectangle()
+                .stroke(Color.green.opacity(0.38), lineWidth: 1)
+                .frame(width: w - innerLeft - innerRight, height: h - safeInsets.top - safeInsets.bottom)
+                .offset(x: innerLeft, y: safeInsets.top)
+
+            let contentTop =
+                safeInsets.top + metrics.topPadding + metrics.headerHeight + metrics.contentSpacing
+                + (showsLearningStrip ? metrics.learningStripOccupiedHeight + metrics.contentSpacing : 0)
+            let gridW =
+                CGFloat(columnCount) * metrics.boardSize
+                + CGFloat(max(0, columnCount - 1)) * metrics.boardGapHorizontal
+            let gridH =
+                CGFloat(rowCount) * metrics.boardSize + CGFloat(max(0, rowCount - 1)) * metrics.boardGapVertical
+            let gridX = innerLeft + max(0, (w - innerLeft - innerRight - gridW) / 2)
+
+            Rectangle()
+                .stroke(Color.purple.opacity(0.42), lineWidth: 1.25)
+                .frame(width: gridW, height: gridH)
+                .offset(x: gridX, y: contentTop)
+
+            ForEach(0 ..< rowCount, id: \.self) { r in
+                ForEach(0 ..< columnCount, id: \.self) { c in
+                    Rectangle()
+                        .stroke(Color.orange.opacity(0.35), lineWidth: 0.75)
+                        .frame(width: metrics.boardSize, height: metrics.boardSize)
+                        .offset(
+                            x: gridX + CGFloat(c) * (metrics.boardSize + metrics.boardGapHorizontal),
+                            y: contentTop + CGFloat(r) * (metrics.boardSize + metrics.boardGapVertical)
+                        )
+                }
+            }
+        }
+        .frame(width: w, height: h)
+    }
+}
+#endif

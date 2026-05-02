@@ -5,52 +5,129 @@
 
 import SwiftUI
 
-struct SessionCompletionPanel: View {
+// MARK: - Full-screen centered modal
+
+/// Zamrznuti sesiju: zatamnjen pozadinski sloj + centrirana kartica (nije u flow-u glavnog `VStack`-a).
+struct SessionCompletionModal: View {
     @Environment(\.sgThemeMode) private var themeMode
 
     let stats: GameStats
     let reason: CompletionReason
     let gameMode: GameMode
-    /// Non-**`nil`** only while **`gameMode == .learning`** — optional Learning strip-style recap.
     let learningProfile: LearningProfile?
     let onPlayAgain: () -> Void
-    var compact: Bool = false
 
-    @State private var revealOpacity: CGFloat = 0
+    @State private var appearPhase: CGFloat = 0
 
     private var t: XOTheme.Tokens { XOTheme.tokens(for: themeMode) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: compact ? SGSpacing.sm : SGSpacing.md) {
-            headerBlock(compact: compact)
+        ZStack {
+            Color.black.opacity(0.08 * Double(appearPhase))
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    HapticService.lightImpact()
+                    onPlayAgain()
+                }
 
-            SessionHandInkDividerShape()
-                .stroke(t.border.opacity(themeMode == .light ? 0.42 : 0.36), style: StrokeStyle(lineWidth: 0.95, lineCap: .round))
-                .frame(height: 3)
+            VStack(spacing: 0) {
+                SessionCompletionCard(
+                    stats: stats,
+                    reason: reason,
+                    gameMode: gameMode,
+                    learningProfile: learningProfile,
+                    onPlayAgain: onPlayAgain,
+                    appearPhase: appearPhase
+                )
+                .environment(\.sgThemeMode, themeMode)
+                .frame(maxWidth: SessionCompletionChrome.maxCardWidth)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .allowsHitTesting(true)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Session complete. \(reason.subtitle). Play again.")
+        .onAppear {
+            appearPhase = 0
+            withAnimation(.easeInOut(duration: 0.2)) {
+                appearPhase = 1
+            }
+        }
+    }
+}
 
-            VStack(alignment: .leading, spacing: compact ? SGSpacing.xs : SGSpacing.sm) {
+// MARK: - Card
+
+private enum SessionCompletionChrome {
+    static let cornerRadius: CGFloat = 20
+    static let cardPadding: CGFloat = 24
+    static let maxCardWidth: CGFloat = 328
+
+    static let cappuccinoLight = Color(red: 243 / 255, green: 237 / 255, blue: 230 / 255)
+    /// Topla kamena ploča u mraku (ne čista siva).
+    static let cappuccinoDark = Color(red: 48 / 255, green: 45 / 255, blue: 42 / 255)
+}
+
+private struct SessionCompletionCard: View {
+    @Environment(\.sgThemeMode) private var themeMode
+
+    let stats: GameStats
+    let reason: CompletionReason
+    let gameMode: GameMode
+    let learningProfile: LearningProfile?
+    let onPlayAgain: () -> Void
+    var appearPhase: CGFloat
+
+    private var t: XOTheme.Tokens { XOTheme.tokens(for: themeMode) }
+
+    private var cardInk: Color {
+        themeMode == .light ? SGColors.inkPrimaryLight : SGColors.textDark
+    }
+
+    private var cardFill: Color {
+        themeMode == .light ? SessionCompletionChrome.cappuccinoLight : SessionCompletionChrome.cappuccinoDark
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Session Complete")
+                    .font(.system(size: themeMode == .light ? 20 : 19, weight: .semibold, design: .rounded))
+                    .foregroundStyle(cardInk.opacity(themeMode == .light ? 0.96 : 0.94))
+                    .tracking(0.35)
+                    .sgEngravedText(intensity: .high, color: cardInk.opacity(themeMode == .light ? 0.96 : 0.94))
+
+                Text(reason.subtitle)
+                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                    .foregroundStyle(t.textSecondary.opacity(themeMode == .light ? 0.78 : 0.74))
+                    .tracking(0.12)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(spacing: 5) {
                 summaryRow(title: xCaption, value: "\(stats.xBoardWins)")
                 summaryRow(title: oCaption, value: "\(stats.oBoardWins)")
                 summaryRow(title: "Draws", value: "\(stats.boardDraws)")
             }
+            .padding(.top, SGSpacing.sm)
 
             if let lp = learningProfile, gameMode == .learning {
-                VStack(alignment: .leading, spacing: SGSpacing.xs) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text("Level: \(lp.currentLevel.title)")
-                        .font(SGTypography.small)
-                        .fontWeight(.medium)
-                        .foregroundStyle(t.textPrimary.opacity(0.92))
-                        .tracking(0.25)
-                        .sgEngravedText(intensity: .low, color: t.textPrimary.opacity(0.92))
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(cardInk.opacity(0.9))
+                        .tracking(0.2)
+                        .sgEngravedText(intensity: .low, color: cardInk.opacity(0.9))
 
                     Text(learningCoachLine(for: lp))
-                        .font(SGTypography.small)
-                        .foregroundStyle(t.textSecondary.opacity(0.9))
-                        .tracking(0.2)
+                        .font(.system(size: 12, weight: .regular, design: .rounded))
+                        .foregroundStyle(t.textSecondary.opacity(0.86))
+                        .tracking(0.12)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.top, SGSpacing.xs)
+                .padding(.top, SGSpacing.xs + 2)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Level \(lp.currentLevel.title). \(learningCoachLine(for: lp))")
             }
@@ -60,34 +137,26 @@ struct SessionCompletionPanel: View {
                 onPlayAgain()
             } label: {
                 Text("Play Again")
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundStyle(cardInk.opacity(themeMode == .light ? 0.95 : 0.96))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, SGSpacing.md)
             }
-            .buttonStyle(
-                SGEngravedTextButtonStyle(variant: .primary(engravedIntensity: .medium), primaryInk: t.textPrimary)
-            )
-            .padding(.top, compact ? SGSpacing.xs : SGSpacing.sm)
+            .buttonStyle(SessionPlayAgainScaleStyle())
         }
-        .padding(compact ? SGSpacing.md : SGSpacing.lg)
+        .padding(SessionCompletionChrome.cardPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: SGRadius.lg, style: .continuous)
-                .fill(t.surface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: SGRadius.lg, style: .continuous)
-                        .strokeBorder(t.border.opacity(themeMode == .light ? 0.5 : 0.42), lineWidth: 0.9)
-                )
-        )
-        .shadow(color: t.shadowCalm.opacity(0.28), radius: floor(t.shadowCalmRadius * 0.55), y: themeMode == .light ? 1 : 1.5)
-        .opacity(Double(revealOpacity))
-        .offset(y: 10 - revealOpacity * 10)
-        .onAppear {
-            revealOpacity = 0
-            withAnimation(.easeOut(duration: 0.42)) {
-                revealOpacity = 1
-            }
-        }
+        .background(cardBackgroundLayers)
+        .opacity(Double(appearPhase))
+        .scaleEffect(CGFloat(0.96 + 0.04 * appearPhase))
+    }
+
+    /// Ugravirani „stone slab”: dvije blage sjene bez obruba.
+    private var cardBackgroundLayers: some View {
+        RoundedRectangle(cornerRadius: SessionCompletionChrome.cornerRadius, style: .continuous)
+            .fill(cardFill)
+            .shadow(color: Color.white.opacity(themeMode == .light ? 0.4 : 0.28), radius: 1.25, x: -2.25, y: -2)
+            .shadow(color: Color(red: 73 / 255, green: 58 / 255, blue: 48 / 255).opacity(themeMode == .light ? 0.25 : 0.38), radius: 4, x: 2.75, y: 4)
     }
 
     private var xCaption: String {
@@ -106,42 +175,24 @@ struct SessionCompletionPanel: View {
         }
     }
 
-    private func headerBlock(compact: Bool) -> some View {
-        VStack(alignment: .leading, spacing: SGSpacing.xs + 2) {
-            Text("Session Complete")
-                .font(compact ? Font.system(size: 17, weight: .semibold, design: .rounded) : SGTypography.sectionTitle)
-                .tracking(SGTypography.subtitleTracking + 0.35)
-                .foregroundStyle(t.textPrimary)
-                .sgEngravedText(intensity: .medium, color: t.textPrimary)
-
-            Text(reason.subtitle)
-                .font(SGTypography.small)
-                .foregroundStyle(t.textSecondary.opacity(0.82))
-                .tracking(0.28)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .allowsHitTesting(false)
-    }
-
     private func summaryRow(title: String, value: String) -> some View {
-        HStack(spacing: SGSpacing.sm) {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(title)
-                .font(SGTypography.small)
-                .foregroundStyle(t.textSecondary)
-                .tracking(0.15)
-            Spacer(minLength: SGSpacing.sm)
+                .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                .foregroundStyle(t.textSecondary.opacity(0.86))
+                .tracking(0.12)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Text(value)
-                .font(SGTypography.body)
-                .fontWeight(.semibold)
-                .foregroundStyle(t.textPrimary)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundStyle(cardInk)
                 .monospacedDigit()
-                .sgEngravedText(intensity: .low, color: t.textPrimary)
+                .sgEngravedText(intensity: .low, color: cardInk)
         }
         .minimumScaleFactor(0.82)
         .lineLimit(1)
     }
 
-    /// Short line for recap — prefers live Learning feedback else a quiet heuristic summary (no **`GameEngine`**).
+    /// Kratak rekapitulant — koristi **`LearningProfile`**, bez **GameEngine**-a.
     private func learningCoachLine(for profile: LearningProfile) -> String {
         let trimmed = profile.latestFeedbackMessage.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { return trimmed }
@@ -155,16 +206,10 @@ struct SessionCompletionPanel: View {
     }
 }
 
-/// Blago nepravilo „povlačenje perom“ umesto strogo horizontalne linije.
-private struct SessionHandInkDividerShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        let y = rect.midY
-        var p = Path()
-        p.move(to: CGPoint(x: rect.minX + 0.2, y: y - 0.25))
-        p.addQuadCurve(
-            to: CGPoint(x: rect.maxX - 0.25, y: y + 0.22),
-            control: CGPoint(x: rect.midX + 0.8, y: y + 0.48)
-        )
-        return p
+private struct SessionPlayAgainScaleStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
     }
 }
