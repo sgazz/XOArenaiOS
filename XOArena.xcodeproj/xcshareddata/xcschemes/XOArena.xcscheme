@@ -14,6 +14,20 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "CFF200032FA4DBE700796BAD"
+               BuildableName = "XOArena Watch App.app"
+               BlueprintName = "XOArena Watch App"
+               ReferencedContainer = "container:XOArena.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "CFF246832FA4DBE700796BAD"
                BuildableName = "XOArena.app"
                BlueprintName = "XOArena"
