@@ -182,9 +182,63 @@ enum GameDebugLogger {
     }
 
     static func clockTickDetailed(active: Mark, xBefore: Int, oBefore: Int, xAfter: Int, oAfter: Int) {
+        // Struktuirani gameplay audit (**`GAMEPLAY_CLOCK`**) ima prigušenje (**max 1/s**).
+        logClockTick(activeMark: active, xTime: xAfter, oTime: oAfter)
+    }
+
+    // MARK: - Gameplay audit (jednolinijsko `key=value`)
+
+    /// Poslednji **`GAMEPLAY_CLOCK`** u monotonim nanosekundama uptime-a (**prigušenje 1 Hz**).
+    private static var lastGameplayClockAuditUptimeNs: UInt64?
+
+    /// Posle **`MOVE_OK`**: potez (board/cell po konvenciji 1‑based kao u tragovima).
+    static func logMove(board: Int, mark: Mark, cell: Int, xTime: Int, oTime: Int) {
         emit(
-            "CLOCK_TICK active=\(markChar(active)) xBefore=\(xBefore) oBefore=\(oBefore) xAfter=\(xAfter) oAfter=\(oAfter)"
+            "GAMEPLAY_MOVE board=\(board) mark=\(markChar(mark)) cell=\(cell) xSec=\(xTime) oSec=\(oTime)"
         )
+    }
+
+    static func logClockTick(activeMark: Mark, xTime: Int, oTime: Int) {
+        let n = DispatchTime.now().uptimeNanoseconds
+        if let last = lastGameplayClockAuditUptimeNs, n &- last < 1_000_000_000 { return }
+        lastGameplayClockAuditUptimeNs = n
+        emit(
+            "GAMEPLAY_CLOCK active=\(markChar(activeMark)) xSec=\(xTime) oSec=\(oTime)"
+        )
+    }
+
+    /// Posle **`CLOCK_SWITCH`**: promena aktivnog igrača na satu.
+    static func logSwitch(from: Mark, to: Mark, board: Int, xTime: Int, oTime: Int) {
+        emit(
+            "GAMEPLAY_SWITCH from=\(markChar(from)) to=\(markChar(to)) board=\(board) xSec=\(xTime) oSec=\(oTime)"
+        )
+    }
+
+    /// Neposredno pre AI kašnjenja (vsAI / learning koristi **`oSec`** kao referencu naglaska).
+    static func logAIThinkStart(oTime: Int) {
+        emit("GAMEPLAY_AI_THINK_START oSec=\(oTime)")
+    }
+
+    /// Odmah posle AI razmišljanja, pre validacije **post‑sleep**.
+    static func logAIThinkEnd(oTime: Int) {
+        emit("GAMEPLAY_AI_THINK_END oSec=\(oTime)")
+    }
+
+    static func logBoardWin(board: Int, winner: Mark) {
+        emit("GAMEPLAY_BOARD_WIN board=\(board) winner=\(markChar(winner))")
+    }
+
+    static func logReward(xTime: Int, oTime: Int) {
+        emit("GAMEPLAY_REWARD xSec=\(xTime) oSec=\(oTime)")
+    }
+
+    static func logDraw(board: Int, xTime: Int, oTime: Int) {
+        emit("GAMEPLAY_DRAW board=\(board) xSec=\(xTime) oSec=\(oTime)")
+    }
+
+    static func logTimeout(loser: Mark, xTime: Int, oTime: Int) {
+        guard loser == .x || loser == .o else { return }
+        emit("GAMEPLAY_TIMEOUT loser=\(markChar(loser)) xSec=\(xTime) oSec=\(oTime)")
     }
 
     static func clockSwitch(from: Mark, to: Mark, boardOneBased: Int) {
@@ -195,6 +249,10 @@ enum GameDebugLogger {
 
     static func drawBonusApplied(secondsEach: Int, xAfter: Int, oAfter: Int) {
         emit("DRAW_BONUS +\(secondsEach) each x=\(xAfter) o=\(oAfter)")
+    }
+
+    static func rewardApplied(winner: Mark, xAfter: Int, oAfter: Int) {
+        emit("REWARD_APPLIED winner=\(markChar(winner)) x=\(xAfter) o=\(oAfter)")
     }
 
     static func timeOut(loser: Mark) {
@@ -303,8 +361,18 @@ enum GameDebugLogger {
     static func aiThink(delaySeconds: Double, remaining: Int, difficulty: String, reason: String) {}
     static func clockTick(active: Mark?, xRemain: Int, oRemain: Int, isAIThinking: Bool) {}
     static func clockTickDetailed(active: Mark, xBefore: Int, oBefore: Int, xAfter: Int, oAfter: Int) {}
+    static func logMove(board: Int, mark: Mark, cell: Int, xTime: Int, oTime: Int) {}
+    static func logClockTick(activeMark: Mark, xTime: Int, oTime: Int) {}
+    static func logSwitch(from: Mark, to: Mark, board: Int, xTime: Int, oTime: Int) {}
+    static func logAIThinkStart(oTime: Int) {}
+    static func logAIThinkEnd(oTime: Int) {}
+    static func logBoardWin(board: Int, winner: Mark) {}
+    static func logReward(xTime: Int, oTime: Int) {}
+    static func logDraw(board: Int, xTime: Int, oTime: Int) {}
+    static func logTimeout(loser: Mark, xTime: Int, oTime: Int) {}
     static func clockSwitch(from: Mark, to: Mark, boardOneBased: Int) {}
     static func drawBonusApplied(secondsEach: Int, xAfter: Int, oAfter: Int) {}
+    static func rewardApplied(winner: Mark, xAfter: Int, oAfter: Int) {}
     static func timeOut(loser: Mark) {}
     static func aiThinkStartDetailed(active: Mark, xRemain: Int, oRemain: Int) {}
     static func aiThinkEndDetailed(active: Mark, xRemain: Int, oRemain: Int) {}

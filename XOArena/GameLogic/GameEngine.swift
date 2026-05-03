@@ -190,6 +190,7 @@ enum GameEngine: Sendable {
         switch afterState {
         case .won(let winner):
             GameDebugLogger.boardCompletedWin(boardIndex: boardIndex, winner: winner, stats: stats)
+            GameDebugLogger.logBoardWin(board: boardIndex + 1, winner: winner)
         case .drawn:
             GameDebugLogger.boardCompletedDraw(boardIndex: boardIndex, stats: stats)
         case .inProgress:

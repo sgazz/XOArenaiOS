@@ -77,6 +77,12 @@ final class GameViewModel {
     private(set) var isTimerRunning: Bool = false
     private(set) var completionReason: CompletionReason?
 
+    /// Kratak vizuelni signal nakon **vsAI / learning** pobjede igrača na tabli (vidi **`TimeRewardEvent`**).
+    private(set) var latestTimeReward: TimeRewardEvent?
+    /// Menja se pri svakoj novoj najavi (**SwiftUI** **`.id`** / animacija bez merge-a istih vrijednosti).
+    private(set) var timeRewardAnnouncementID: UInt64 = 0
+    private var clearTimeRewardTask: Task<Void, Never>?
+
 #if DEBUG
     /// Vizuelni DEBUG audit sata (**`GameView.showClockAuditOverlay`**).
     var debugClockAuditTimerActiveMark: Mark? { timerActiveForMark }
@@ -105,6 +111,14 @@ final class GameViewModel {
     }
 
     private static let boardDrawTimeBonusSeconds: Int = 5
+    /// vsAI / learning: kada **X** osvoji tablu, **+X / −O** pre klampa.
+    private static let vsAILearningXBoardWinRewardShiftSeconds: Int = 5
+    /// Gornja granica banka **X** nakon nagrade: **`selectedDuration` + ovo**.
+    private static let vsAILearningXTimeCapOverInitialSeconds: Int = 15
+    /// Donja granica banka **O** nakon nagrade.
+    private static let vsAILearningOTimeFloorAfterRewardSeconds: Int = 3
+    /// Koliko dugo drži **`latestTimeReward`** prije auto-brisanja (**~1.2s**, usklađeno sa HUD fade pulsom).
+    private static let timeRewardFeedbackVisibilityNanoseconds: UInt64 = 1_220_000_000
 
     private func secondsForMark(_ mark: Mark) -> Int {
         switch mark {
@@ -115,7 +129,8 @@ final class GameViewModel {
     }
 
     /// Zaustavlja sat, opciono dodeljuje bonus nerešenom mini‑krugu, ponovo pokreće sat za **`currentMark`**.
-    private func resyncClocksAfterMove(from before: GameSession, to after: GameSession) {
+    /// **`movedBoardIndex`**: tabla na kojoj je **`applyMove`** izvršen (za **`GAMEPLAY_DRAW`**, ne aktivna posle **`GameEngine`**).
+    private func resyncClocksAfterMove(from before: GameSession, to after: GameSession, movedBoardIndex: Int? = nil) {
         snapOutgoingClockFromDeadlineBeforeStopping()
         stopTimer()
         if after.stats.boardDraws > before.stats.boardDraws {
@@ -127,9 +142,52 @@ final class GameViewModel {
                 xAfter: xRemainingSeconds,
                 oAfter: oRemainingSeconds
             )
+            let drawBoard = movedBoardIndex ?? before.activeBoardIndex
+            GameDebugLogger.logDraw(
+                board: drawBoard + 1,
+                xTime: xRemainingSeconds,
+                oTime: oRemainingSeconds
+            )
 #endif
+        } else if after.gameMode == .vsAI || after.gameMode == .learning,
+                  after.stats.xBoardWins > before.stats.xBoardWins {
+            xRemainingSeconds += Self.vsAILearningXBoardWinRewardShiftSeconds
+            oRemainingSeconds -= Self.vsAILearningXBoardWinRewardShiftSeconds
+            let xCap = selectedDuration.seconds + Self.vsAILearningXTimeCapOverInitialSeconds
+            let oFloor = Self.vsAILearningOTimeFloorAfterRewardSeconds
+            xRemainingSeconds = min(xRemainingSeconds, xCap)
+            oRemainingSeconds = max(oRemainingSeconds, oFloor)
+#if DEBUG
+            GameDebugLogger.rewardApplied(
+                winner: .x,
+                xAfter: xRemainingSeconds,
+                oAfter: oRemainingSeconds
+            )
+            GameDebugLogger.logReward(xTime: xRemainingSeconds, oTime: oRemainingSeconds)
+#endif
+            presentBoardWinTimeRewardFeedback(.playerVsAIBoardWin)
         }
         startTimerIfNeeded()
+    }
+
+    private func presentBoardWinTimeRewardFeedback(_ event: TimeRewardEvent) {
+        clearTimeRewardTask?.cancel()
+        latestTimeReward = event
+        timeRewardAnnouncementID += 1
+        HapticService.success()
+        clearTimeRewardTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: Self.timeRewardFeedbackVisibilityNanoseconds)
+            guard let self else { return }
+            if !Task.isCancelled {
+                latestTimeReward = nil
+            }
+        }
+    }
+
+    private func cancelTimeRewardFeedback() {
+        clearTimeRewardTask?.cancel()
+        clearTimeRewardTask = nil
+        latestTimeReward = nil
     }
 
     private var aiSequence: UInt64 = 0
@@ -232,6 +290,7 @@ final class GameViewModel {
         xRemainingSeconds = full
         oRemainingSeconds = full
         completionReason = nil
+        cancelTimeRewardFeedback()
         cancelAIPipeline(debugLogCancel: true)
         stopTimer()
         session = GameEngine.makeInitialSession(mode: mode)
@@ -318,8 +377,16 @@ final class GameViewModel {
                 afterStats: next.stats,
                 learningSuccessfulBlock: learningBlockIncremented
             )
-            resyncClocksAfterMove(from: beforeSession, to: next)
+            resyncClocksAfterMove(from: beforeSession, to: next, movedBoardIndex: boardIndex)
 #if DEBUG
+            let placedMark = beforeSession.boards[boardIndex].currentMark
+            GameDebugLogger.logMove(
+                board: boardIndex + 1,
+                mark: placedMark,
+                cell: cellIndex + 1,
+                xTime: xRemainingSeconds,
+                oTime: oRemainingSeconds
+            )
             bumpAiVsAIBoardResetIfNeeded(before: beforeSession, after: next)
             if next.gameMode != .aiVsAI {
                 GameDebugLogger.snapshot(session: session, formattedTime: formattedRemainingTime)
@@ -348,6 +415,7 @@ final class GameViewModel {
         xRemainingSeconds = full
         oRemainingSeconds = full
         completionReason = nil
+        cancelTimeRewardFeedback()
         cancelAIPipeline(debugLogCancel: true)
 #if DEBUG
         if session.gameMode == .vsAI || session.gameMode == .learning {
@@ -412,6 +480,7 @@ final class GameViewModel {
     }
 
     func onGameViewDisappear() {
+        cancelTimeRewardFeedback()
         stopTimer()
         cancelAIPipeline(debugLogCancel: true)
     }
@@ -461,6 +530,13 @@ final class GameViewModel {
                 to: mark,
                 boardOneBased: session.activeBoardIndex + 1
             )
+            GameDebugLogger.logSwitch(
+                from: fm,
+                to: mark,
+                board: session.activeBoardIndex + 1,
+                xTime: xRemainingSeconds,
+                oTime: oRemainingSeconds
+            )
         }
 #endif
         timerActiveForMark = mark
@@ -474,10 +550,6 @@ final class GameViewModel {
                     guard self.session.sessionState == .playing else { return }
                     let live = self.session.currentMarkForActiveBoard
                     guard live == runningMark else { return }
-#if DEBUG
-                    let xBefore = self.xRemainingSeconds
-                    let oBefore = self.oRemainingSeconds
-#endif
                     let left: Int
                     if self.activeClockDeadline != nil {
                         left = self.updateClockBankFromDeadline(for: runningMark)
@@ -490,12 +562,10 @@ final class GameViewModel {
                         }
                     }
 #if DEBUG
-                    GameDebugLogger.clockTickDetailed(
-                        active: runningMark,
-                        xBefore: xBefore,
-                        oBefore: oBefore,
-                        xAfter: self.xRemainingSeconds,
-                        oAfter: self.oRemainingSeconds
+                    GameDebugLogger.logClockTick(
+                        activeMark: runningMark,
+                        xTime: self.xRemainingSeconds,
+                        oTime: self.oRemainingSeconds
                     )
 #endif
                     if left == 0 {
@@ -583,6 +653,11 @@ final class GameViewModel {
             completionReason = .timeExpired
         }
 #if DEBUG
+        GameDebugLogger.logTimeout(
+            loser: expiredMark,
+            xTime: xRemainingSeconds,
+            oTime: oRemainingSeconds
+        )
         GameDebugLogger.timeOut(loser: expiredMark)
 #endif
         var next = session
@@ -770,6 +845,7 @@ final class GameViewModel {
 #endif
 
 #if DEBUG
+            GameDebugLogger.logAIThinkStart(oTime: self.oRemainingSeconds)
             GameDebugLogger.aiThinkStartDetailed(
                 active: scheduledMark,
                 xRemain: self.xRemainingSeconds,
@@ -947,8 +1023,16 @@ final class GameViewModel {
                     afterStats: applied.stats,
                     learningSuccessfulBlock: false
                 )
-                self.resyncClocksAfterMove(from: beforeSnap, to: applied)
+                self.resyncClocksAfterMove(from: beforeSnap, to: applied, movedBoardIndex: idx)
 #if DEBUG
+                GameDebugLogger.logMove(
+                    board: idx + 1,
+                    mark: aiMarkSnapshot,
+                    cell: cell + 1,
+                    xTime: self.xRemainingSeconds,
+                    oTime: self.oRemainingSeconds
+                )
+                GameDebugLogger.logAIThinkEnd(oTime: self.oRemainingSeconds)
                 self.bumpAiVsAIBoardResetIfNeeded(before: beforeSnap, after: applied)
                 GameDebugLogger.aiMoveApplied(boardIndex: idx, cellIndex: cell, mark: toPlay)
                 if applied.gameMode == .aiVsAI {
