@@ -1074,7 +1074,7 @@ final class GameViewModel {
             let aiMarkSnapshot = toPlay
             let humanMarkSnapshot = opponent
             let cellOpt = await Task.detached(priority: .utility) {
-                await TicTacToeAI.chooseMove(
+                TicTacToeAI.chooseMove(
                     on: slabCopy,
                     aiMark: aiMarkSnapshot,
                     humanMark: humanMarkSnapshot,

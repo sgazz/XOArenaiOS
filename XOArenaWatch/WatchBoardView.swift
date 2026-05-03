@@ -6,7 +6,8 @@
 import SwiftUI
 
 struct WatchBoardView: View {
-    let board: XOBoard
+    let cells: [Mark?]
+    let phase: BoardPlayState
     var locked: Bool
     let onTap: (Int) -> Void
 
@@ -15,15 +16,15 @@ struct WatchBoardView: View {
             let side = min(geo.size.width, geo.size.height)
             let gap: CGFloat = 5
             let cellSide = max((side - gap * 2) / 3, 8)
+            let columns = [
+                GridItem(.flexible(), spacing: gap, alignment: .center),
+                GridItem(.flexible(), spacing: gap, alignment: .center),
+                GridItem(.flexible(), spacing: gap, alignment: .center),
+            ]
 
-            VStack(spacing: gap) {
-                ForEach(0..<3, id: \.self) { row in
-                    HStack(spacing: gap) {
-                        ForEach(0..<3, id: \.self) { col in
-                            let idx = row * 3 + col
-                            cell(at: idx, size: cellSide)
-                        }
-                    }
+            LazyVGrid(columns: columns, spacing: gap) {
+                ForEach(0..<9, id: \.self) { index in
+                    cellView(at: index, size: cellSide)
                 }
             }
             .frame(width: side, height: side, alignment: .center)
@@ -32,8 +33,10 @@ struct WatchBoardView: View {
     }
 
     @ViewBuilder
-    private func cell(at index: Int, size: CGFloat) -> some View {
-        let mark = board.cells[index].mark
+    private func cellView(at index: Int, size: CGFloat) -> some View {
+        let mark = resolvedMark(at: index)
+        let snapshot = index < cells.count ? cells[index] : nil
+
         Button {
             onTap(index)
         } label: {
@@ -44,16 +47,26 @@ struct WatchBoardView: View {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .stroke(WatchColors.border, lineWidth: 1)
                     )
-                markText(mark)
+                markGlyph(mark)
             }
             .frame(width: size, height: size)
         }
         .buttonStyle(.plain)
-        .disabled(locked || mark != .empty || board.playState != .inProgress)
+        .disabled(locked || mark != .empty || phase != .inProgress)
+        #if DEBUG
+        .onAppear {
+            Self.logCellRender(index: index, mark: snapshot)
+        }
+        #endif
+    }
+
+    private func resolvedMark(at index: Int) -> Mark {
+        guard index < cells.count, let m = cells[index] else { return .empty }
+        return m
     }
 
     @ViewBuilder
-    private func markText(_ mark: Mark) -> some View {
+    private func markGlyph(_ mark: Mark) -> some View {
         switch mark {
         case .x:
             Text("X")
@@ -67,4 +80,16 @@ struct WatchBoardView: View {
             Color.clear
         }
     }
+
+    #if DEBUG
+    private static func logCellRender(index: Int, mark: Mark?) {
+        let desc: String
+        if let m = mark {
+            desc = m.rawValue
+        } else {
+            desc = "nil"
+        }
+        print("[XOArenaWatch] CELL_RENDER index=\(index) mark=\(desc)")
+    }
+    #endif
 }

@@ -6,7 +6,9 @@
 import Foundation
 
 /// Single-slab tic-tac-toe AI: **`rankedMoves`** + minimax, with humanized stochastic choices by **`AIDifficulty`**.
-enum TicTacToeAI: Sendable {
+///
+/// `nonisolated`: pure logic; safe to call off the main actor when targets use default MainActor isolation (`Task.detached`).
+nonisolated enum TicTacToeAI: Sendable {
     typealias RankedMove = (index: Int, score: Int)
 
     private struct MinimaxCacheKey: Hashable {

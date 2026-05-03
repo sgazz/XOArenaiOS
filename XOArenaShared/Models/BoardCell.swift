@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct BoardCell: Identifiable, Equatable, Sendable {
+nonisolated struct BoardCell: Identifiable, Equatable, Sendable {
     let index: Int
     var mark: Mark
 

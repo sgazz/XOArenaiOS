@@ -6,7 +6,7 @@
 import Foundation
 
 /// Single-board AI strength for **`TicTacToeAI`** (evaluates only the given **`XOBoard`** slab).
-enum AIDifficulty: String, CaseIterable, Equatable, Hashable, Sendable {
+nonisolated enum AIDifficulty: String, CaseIterable, Equatable, Hashable, Sendable {
     /// Random-ish play with a light filter plus optional timer “panic”.
     case easy
     /// Instant win/block, otherwise random among top minimax-ranked moves (pool widens under time pressure).

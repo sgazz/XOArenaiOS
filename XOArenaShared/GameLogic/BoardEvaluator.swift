@@ -6,7 +6,7 @@
 import Foundation
 
 /// Classic 3×3 win geometry: rows, columns, both diagonals.
-enum BoardEvaluator: Sendable {
+nonisolated enum BoardEvaluator: Sendable {
     private static let winLines: [[Int]] = [
         [0, 1, 2], [3, 4, 5], [6, 7, 8],
         [0, 3, 6], [1, 4, 7], [2, 5, 8],

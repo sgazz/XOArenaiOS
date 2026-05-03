@@ -6,7 +6,7 @@
 import Foundation
 
 /// Session timer snapshot for **`TicTacToeAI`** time‑pressure jitter (does not interact with **`GameEngine`** rules).
-struct AIMoveTimerContext: Equatable, Sendable {
+nonisolated struct AIMoveTimerContext: Equatable, Sendable {
     var remainingSeconds: Int
     /// Total countdown length for this session (**`selectedDuration.seconds`** pattern from UI).
     var totalSeconds: Int
@@ -18,7 +18,7 @@ struct AIMoveTimerContext: Equatable, Sendable {
         return min(1, r)
     }
 
-    enum Pressure: Sendable {
+    nonisolated enum Pressure: Sendable {
         /// **≥ ~30 %** remaining (or unknown timer).
         case comfortable
         /// **\< 30 %** and **≥ 10 %**.

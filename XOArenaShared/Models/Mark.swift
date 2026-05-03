@@ -5,7 +5,7 @@
 
 import Foundation
 
-enum Mark: String, CaseIterable, Equatable, Sendable {
+nonisolated enum Mark: String, CaseIterable, Equatable, Sendable {
     case empty
     case x
     case o
