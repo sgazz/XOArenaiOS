@@ -38,15 +38,26 @@ final class GameVsAIReplayTests: XCTestCase {
     @MainActor
     func test_view_model_schedules_ai_when_o_starts_board() async throws {
         var seeded = GameEngine.makeInitialSession(mode: .vsAI)
-        seeded.boards[0].startingMark = .o
-        seeded.boards[0].turnPhase = .firstMove
-        let vm = GameViewModel(session: seeded, timerService: GameTimerService())
+        var slab0 = seeded.boards[0]
+        slab0.startingMark = .o
+        slab0.turnPhase = .firstMove
+        seeded.boards[0] = slab0
+
+        let timer = MockGameTimerService()
+        let vm = GameViewModel(session: seeded, timerService: timer, now: { timer.clock.date })
+        vm.aiThinkDelayNanosecondsOverrideForTests = 0
         vm.onGameViewAppear()
-        try await Task.sleep(nanoseconds: 700_000_000)
+        await Task.yield()
+
+        await waitUntil(
+            "AI places O then human X acts",
+            timeoutNs: 3_000_000_000
+        ) {
+            vm.boards[0].cells.filter { $0.mark == .o }.count == 1 && vm.currentMark == .x
+        }
 
         XCTAssertEqual(vm.activeBoardIndex, 0)
         XCTAssertEqual(vm.currentMark, .x)
-        let oCount = vm.boards[0].cells.filter { $0.mark == .o }.count
-        XCTAssertEqual(oCount, 1)
+        XCTAssertEqual(vm.boards[0].cells.filter { $0.mark == .o }.count, 1)
     }
 }

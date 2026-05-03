@@ -4,6 +4,7 @@
 //
 
 import Combine
+import Dispatch
 import Foundation
 
 protocol GameTimerControlling: AnyObject {
@@ -41,6 +42,7 @@ final class GameTimerService: GameTimerControlling {
         timerCancellable = Timer
             .publish(every: 1, on: .main, in: .common)
             .autoconnect()
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self else { return }
                 self.remainingSeconds -= 1

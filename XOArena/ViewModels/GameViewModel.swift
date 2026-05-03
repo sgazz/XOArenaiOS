@@ -11,6 +11,11 @@ import Observation
 final class GameViewModel {
     private(set) var session: GameSession
     private let timerService: GameTimerControlling
+    /// Monotonic / wall source for countdown deadlines (**`Mock + TestClock`** može zaključati testove).
+    private let now: () -> Date
+
+    /// Kada je postavljeno (samo **`@testable`** testovi), preskače slučajnu vsAI pause.
+    internal var aiThinkDelayNanosecondsOverrideForTests: UInt64?
 
     /// True when the slab is paced by **`TicTacToeAI`** (**`vsAI`**: **`O`** only; **`aiVsAI`**: both marks).
     var isAITurn: Bool {
@@ -26,7 +31,7 @@ final class GameViewModel {
     var aiVsAIDelayPreset: AIDebugDelayPreset = .fast
 
     /// Last selected AI strength for **`vsAI`** / **`aiVsAI`** (persisted across **`startNewGame`** / **`resetGame`**).
-    private var preferredAIDifficulty: AIDifficulty = .hard
+    private var preferredAIDifficulty: AIDifficulty = .easy
 
     /// Current session AI difficulty (single-board **`TicTacToeAI`**). Writable for DEBUG toolbar.
     var aiDifficulty: AIDifficulty {
@@ -60,16 +65,71 @@ final class GameViewModel {
     /// Populated while **`GameMode.learning`** is active (human **X**, adaptive **O**).
     private(set) var learningProfile: LearningProfile = .initial
 
-    private(set) var selectedDuration: GameDuration = .threeMinutes
-    private(set) var remainingSeconds: Int = GameDuration.threeMinutes.seconds
+    private(set) var selectedDuration: GameDuration = .oneMinute
+    /// Preostalo vreme na satu igrača **X** (sesija).
+    private(set) var xRemainingSeconds: Int = GameDuration.oneMinute.seconds
+    /// Preostalo vreme na satu igrača **O** (sesija).
+    private(set) var oRemainingSeconds: Int = GameDuration.oneMinute.seconds
+    /// Čiji se sat trenutno odbrojava u **`GameTimerService`** (samo jedan aktivan).
+    private var timerActiveForMark: Mark?
+    /// Wall-clock trenutak kada ističe preostalo vreme za **`timerActiveForMark`** (uključujući AI pauzu; ne pauzira se za **`isAIThinking`**).
+    private var activeClockDeadline: Date?
     private(set) var isTimerRunning: Bool = false
     private(set) var completionReason: CompletionReason?
 
-    var formattedRemainingTime: String {
-        let bounded = max(remainingSeconds, 0)
+#if DEBUG
+    /// Vizuelni DEBUG audit sata (**`GameView.showClockAuditOverlay`**).
+    var debugClockAuditTimerActiveMark: Mark? { timerActiveForMark }
+#endif
+
+    /// Aktivni igrač (**`currentMark`**) — zgodno za AI i hitne provere.
+    var remainingSeconds: Int {
+        switch currentMark {
+        case .x: return xRemainingSeconds
+        case .o: return oRemainingSeconds
+        case .empty: return min(xRemainingSeconds, oRemainingSeconds)
+        }
+    }
+
+    var formattedRemainingTime: String { Self.formatClockDigits(remainingSeconds) }
+
+    var formattedXRemainingTime: String { Self.formatClockDigits(xRemainingSeconds) }
+
+    var formattedORemainingTime: String { Self.formatClockDigits(oRemainingSeconds) }
+
+    private static func formatClockDigits(_ seconds: Int) -> String {
+        let bounded = max(seconds, 0)
         let mins = bounded / 60
         let secs = bounded % 60
         return String(format: "%02d:%02d", mins, secs)
+    }
+
+    private static let boardDrawTimeBonusSeconds: Int = 5
+
+    private func secondsForMark(_ mark: Mark) -> Int {
+        switch mark {
+        case .x: return xRemainingSeconds
+        case .o: return oRemainingSeconds
+        case .empty: return 0
+        }
+    }
+
+    /// Zaustavlja sat, opciono dodeljuje bonus nerešenom mini‑krugu, ponovo pokreće sat za **`currentMark`**.
+    private func resyncClocksAfterMove(from before: GameSession, to after: GameSession) {
+        snapOutgoingClockFromDeadlineBeforeStopping()
+        stopTimer()
+        if after.stats.boardDraws > before.stats.boardDraws {
+            xRemainingSeconds += Self.boardDrawTimeBonusSeconds
+            oRemainingSeconds += Self.boardDrawTimeBonusSeconds
+#if DEBUG
+            GameDebugLogger.drawBonusApplied(
+                secondsEach: Self.boardDrawTimeBonusSeconds,
+                xAfter: xRemainingSeconds,
+                oAfter: oRemainingSeconds
+            )
+#endif
+        }
+        startTimerIfNeeded()
     }
 
     private var aiSequence: UInt64 = 0
@@ -84,16 +144,18 @@ final class GameViewModel {
     init(
         session: GameSession? = nil,
         services: AppServices = AppServices(),
-        timerService: GameTimerControlling
+        timerService: GameTimerControlling,
+        now: @escaping () -> Date = { Date() }
     ) {
         _ = services
         self.timerService = timerService
+        self.now = now
         self.session = session ?? GameEngine.makeIdleSession()
         _ = SoundService.shared
     }
 
     convenience init(session: GameSession? = nil, services: AppServices = AppServices()) {
-        self.init(session: session, services: services, timerService: GameTimerService())
+        self.init(session: session, services: services, timerService: GameTimerService(), now: { Date() })
     }
 
     var boards: [XOBoard] { session.boards }
@@ -164,9 +226,11 @@ final class GameViewModel {
     /// Backwards‑compatible combined line for callers that want a single string.
     var turnLabel: String { turnLabelPrimary }
 
-    func startNewGame(mode: GameMode, duration: GameDuration = .threeMinutes) {
+    func startNewGame(mode: GameMode, duration: GameDuration = .oneMinute) {
         selectedDuration = duration
-        remainingSeconds = duration.seconds
+        let full = duration.seconds
+        xRemainingSeconds = full
+        oRemainingSeconds = full
         completionReason = nil
         cancelAIPipeline(debugLogCancel: true)
         stopTimer()
@@ -182,7 +246,7 @@ final class GameViewModel {
         if mode == .aiVsAI {
             aiVsAIDebugBoardResetCount = 0
             aiVsAIDebugInvalidMoves = 0
-            aiVsAIDebugStartedAt = Date()
+            aiVsAIDebugStartedAt = now()
             aiVsAIDelayPreset = .fast
         } else {
             aiVsAIDebugStartedAt = nil
@@ -254,6 +318,7 @@ final class GameViewModel {
                 afterStats: next.stats,
                 learningSuccessfulBlock: learningBlockIncremented
             )
+            resyncClocksAfterMove(from: beforeSession, to: next)
 #if DEBUG
             bumpAiVsAIBoardResetIfNeeded(before: beforeSession, after: next)
             if next.gameMode != .aiVsAI {
@@ -279,7 +344,9 @@ final class GameViewModel {
     }
 
     func resetGame() {
-        remainingSeconds = selectedDuration.seconds
+        let full = selectedDuration.seconds
+        xRemainingSeconds = full
+        oRemainingSeconds = full
         completionReason = nil
         cancelAIPipeline(debugLogCancel: true)
 #if DEBUG
@@ -300,7 +367,7 @@ final class GameViewModel {
         if mode == .aiVsAI {
             aiVsAIDebugBoardResetCount = 0
             aiVsAIDebugInvalidMoves = 0
-            aiVsAIDebugStartedAt = Date()
+            aiVsAIDebugStartedAt = now()
             aiVsAIDelayPreset = .fast
         } else {
             aiVsAIDebugStartedAt = nil
@@ -321,6 +388,9 @@ final class GameViewModel {
         if session.gameMode == .vsAI || session.gameMode == .learning, currentMark != .x { return }
         guard let next = GameEngine.advanceFocus(session) else { return }
         session = next
+        snapOutgoingClockFromDeadlineBeforeStopping()
+        stopTimer()
+        startTimerIfNeeded()
 #if DEBUG
         GameDebugLogger.snapshot(session: session, formattedTime: formattedRemainingTime)
 #endif
@@ -330,7 +400,9 @@ final class GameViewModel {
     func selectDuration(_ duration: GameDuration) {
         selectedDuration = duration
         if session.sessionState == .notStarted || session.sessionState == .completed {
-            remainingSeconds = duration.seconds
+            let full = duration.seconds
+            xRemainingSeconds = full
+            oRemainingSeconds = full
         }
     }
 
@@ -359,25 +431,82 @@ final class GameViewModel {
 
     private func startTimerIfNeeded() {
         guard session.sessionState == .playing else { return }
-        guard !isTimerRunning else {
-            scheduleAIIfNeeded()
+        let mark = currentMark
+        guard mark == .x || mark == .o else { return }
+
+#if DEBUG
+        var switchedFromTimerMark: Mark? = nil
+#endif
+        if isTimerRunning {
+            if timerActiveForMark == mark {
+                scheduleAIIfNeeded()
+                return
+            }
+#if DEBUG
+            switchedFromTimerMark = timerActiveForMark
+#endif
+            snapOutgoingClockFromDeadlineBeforeStopping()
+            stopTimer()
+        }
+
+        let secs = secondsForMark(mark)
+        guard secs > 0 else {
+            completeForTimeExpiryIfNeeded(finishedMark: mark)
             return
         }
-        guard remainingSeconds > 0 else {
-            completeForTimeExpiryIfNeeded()
-            return
+#if DEBUG
+        if let fm = switchedFromTimerMark, fm != mark {
+            GameDebugLogger.clockSwitch(
+                from: fm,
+                to: mark,
+                boardOneBased: session.activeBoardIndex + 1
+            )
         }
+#endif
+        timerActiveForMark = mark
+        let runningMark = mark
+        activeClockDeadline = now().addingTimeInterval(TimeInterval(secs))
         timerService.start(
-            seconds: remainingSeconds,
+            seconds: secs,
             onTick: { [weak self] seconds in
-                DispatchQueue.main.async { [weak self] in
+                Task { @MainActor [weak self] in
                     guard let self else { return }
-                    self.remainingSeconds = seconds
+                    guard self.session.sessionState == .playing else { return }
+                    let live = self.session.currentMarkForActiveBoard
+                    guard live == runningMark else { return }
+#if DEBUG
+                    let xBefore = self.xRemainingSeconds
+                    let oBefore = self.oRemainingSeconds
+#endif
+                    let left: Int
+                    if self.activeClockDeadline != nil {
+                        left = self.updateClockBankFromDeadline(for: runningMark)
+                    } else {
+                        left = seconds
+                        switch runningMark {
+                        case .x: self.xRemainingSeconds = seconds
+                        case .o: self.oRemainingSeconds = seconds
+                        case .empty: break
+                        }
+                    }
+#if DEBUG
+                    GameDebugLogger.clockTickDetailed(
+                        active: runningMark,
+                        xBefore: xBefore,
+                        oBefore: oBefore,
+                        xAfter: self.xRemainingSeconds,
+                        oAfter: self.oRemainingSeconds
+                    )
+#endif
+                    if left == 0 {
+                        self.completeForTimeExpiryIfNeeded(finishedMark: runningMark)
+                    }
                 }
             },
             onFinished: { [weak self] in
-                DispatchQueue.main.async { [weak self] in
-                    self?.completeForTimeExpiryIfNeeded()
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.completeForTimeExpiryIfNeeded(finishedMark: runningMark)
                 }
             }
         )
@@ -388,10 +517,51 @@ final class GameViewModel {
     private func stopTimer() {
         timerService.stop()
         isTimerRunning = false
+        timerActiveForMark = nil
+        activeClockDeadline = nil
     }
 
-    private func completeForTimeExpiryIfNeeded() {
+    /// Snima proteklo wall vreme u banku pre **`stopTimer()`** (npr. potez kraći od 1 s — **`GameTimerService`** ne okine).
+    private func snapOutgoingClockFromDeadlineBeforeStopping() {
+        guard let m = timerActiveForMark, m == .x || m == .o else { return }
+        _ = updateClockBankFromDeadline(for: m)
+    }
+
+    /// Samo čitanje preostalog vremena sa **`activeClockDeadline`** (bez menjanja **`@Observable`** stanja — za log ili brzu proveru).
+    private func peekWallRemainingSeconds(for armMark: Mark) -> Int {
+        guard armMark == .x || armMark == .o else { return 0 }
+        guard armMark == timerActiveForMark, let deadline = activeClockDeadline else {
+            return secondsForMark(armMark)
+        }
+        return max(0, Int(floor(deadline.timeIntervalSince(now()))))
+    }
+
+    /// Vraća preostale sekunde za **`armMark`** nakon usklađivanja sa **`activeClockDeadline`**.
+    /// Kreće se samo kada **`armMark`** odgovara trenutno naoružanom **`GameTimerService`** (**`timerActiveForMark`**); u suprotnom ne prepisuje banku nevidljive boje (**`deadline`** je zajednički).
+    private func updateClockBankFromDeadline(for armMark: Mark) -> Int {
+        guard armMark == .x || armMark == .o else { return 0 }
+        guard armMark == timerActiveForMark else {
+            return secondsForMark(armMark)
+        }
+        guard let deadline = activeClockDeadline else {
+            return secondsForMark(armMark)
+        }
+        let left = max(0, Int(floor(deadline.timeIntervalSince(now()))))
+        switch armMark {
+        case .x: xRemainingSeconds = left
+        case .o: oRemainingSeconds = left
+        default: break
+        }
+        return left
+    }
+
+    private func completeForTimeExpiryIfNeeded(finishedMark: Mark? = nil) {
         guard session.sessionState == .playing else {
+            stopTimer()
+            return
+        }
+        let expiredMark = finishedMark ?? timerActiveForMark
+        guard let expiredMark, expiredMark == .x || expiredMark == .o else {
             stopTimer()
             return
         }
@@ -402,14 +572,26 @@ final class GameViewModel {
             GameDebugLogger.vsAIVerifyTimerExpiryCancelledPendingAI()
         }
 #endif
-        remainingSeconds = 0
+        switch expiredMark {
+        case .x:
+            xRemainingSeconds = 0
+            completionReason = .xTimedOut
+        case .o:
+            oRemainingSeconds = 0
+            completionReason = .oTimedOut
+        case .empty:
+            completionReason = .timeExpired
+        }
+#if DEBUG
+        GameDebugLogger.timeOut(loser: expiredMark)
+#endif
         var next = session
         next.sessionState = .completed
         HapticService.heavyImpact()
         SoundService.shared.playCompletion()
 #if DEBUG
         if session.gameMode == .aiVsAI {
-            let elapsed = aiVsAIDebugStartedAt.map { Int(Date().timeIntervalSince($0)) } ?? selectedDuration.seconds
+            let elapsed = aiVsAIDebugStartedAt.map { Int(now().timeIntervalSince($0)) } ?? selectedDuration.seconds
             GameDebugLogger.testSummaryAiVsAI(
                 totalMoves: session.stats.totalMoves,
                 xWins: session.stats.xBoardWins,
@@ -424,10 +606,16 @@ final class GameViewModel {
         GameDebugLogger.snapshot(session: next, formattedTime: "00:00")
 #endif
         session = next
-        completionReason = .timeExpired
         stopTimer()
 #if DEBUG
-        GameDebugLogger.sessionCompleted(reason: "time_expired")
+        let reasonLog: String = {
+            switch expiredMark {
+            case .x: return "x_timed_out"
+            case .o: return "o_timed_out"
+            case .empty: return "time_expired"
+            }
+        }()
+        GameDebugLogger.sessionCompleted(reason: reasonLog)
 #endif
     }
 
@@ -462,16 +650,12 @@ final class GameViewModel {
             audit(false, "session_not_playing")
             return
         }
-        guard remainingSeconds > 0 else {
+        guard secondsForMark(mark) > 0 else {
             audit(false, "timer_zero")
             return
         }
         guard aiTask == nil else {
             audit(false, "ai_task_inflight")
-            return
-        }
-        guard !isAIThinking else {
-            audit(false, "thinking_flag_set")
             return
         }
         guard mark == .x || mark == .o else {
@@ -533,15 +717,49 @@ final class GameViewModel {
                 self.aiWhisperLine = "O is drawing…"
             }
 
-            let delayNanos: UInt64 = {
-                if runningMode == .aiVsAI { return self.aiVsAIDelayPreset.nanoseconds }
-                let lower: UInt64 = 350_000_000
-                let upper: UInt64 = 550_000_000
-                let span = Swift.max(upper - lower, 1)
-                return lower + UInt64.random(in: 0..<span)
-            }()
+            let computedDelayNanos: UInt64
+            let thinkLogRemaining: Int
+            let thinkLogDifficulty: String
+            let thinkLogReason: String
+            if runningMode == .aiVsAI {
+                computedDelayNanos = self.aiVsAIDelayPreset.nanoseconds
+                thinkLogRemaining = self.secondsForMark(scheduledMark)
+                thinkLogDifficulty = self.session.aiDifficulty.rawValue
+                thinkLogReason = "aiVsAI_debug_preset=\(self.aiVsAIDelayPreset.rawValue)"
+            } else {
+                let effectiveDifficulty: AIDifficulty =
+                    self.session.gameMode == .learning
+                    ? self.learningProfile.adaptiveAIDifficulty()
+                    : self.session.aiDifficulty
+                let remainingForCap = self.secondsForMark(scheduledMark)
+                let vSeed = AIThinkingDelay.variationSeed(
+                    board: slabSnapshot,
+                    difficulty: effectiveDifficulty,
+                    token: token
+                )
+                let computed = AIThinkingDelay.nanoseconds(
+                    difficulty: effectiveDifficulty,
+                    aiRemainingSeconds: remainingForCap,
+                    board: slabSnapshot,
+                    aiMark: scheduledMark,
+                    opponentMark: scheduledMark.nextInTurn,
+                    variationSeed: vSeed
+                )
+                computedDelayNanos = computed.nanoseconds
+                thinkLogRemaining = remainingForCap
+                thinkLogDifficulty = effectiveDifficulty.rawValue
+                thinkLogReason = computed.reason
+            }
+
+            let delayNanos = self.aiThinkDelayNanosecondsOverrideForTests ?? computedDelayNanos
 
 #if DEBUG
+            GameDebugLogger.aiThink(
+                delaySeconds: Double(delayNanos) / 1_000_000_000.0,
+                remaining: thinkLogRemaining,
+                difficulty: thinkLogDifficulty,
+                reason: thinkLogReason
+            )
             GameDebugLogger.aiScheduled(
                 boardIndex: scheduledBoardIndex,
                 mark: scheduledMark,
@@ -551,6 +769,13 @@ final class GameViewModel {
             )
 #endif
 
+#if DEBUG
+            GameDebugLogger.aiThinkStartDetailed(
+                active: scheduledMark,
+                xRemain: self.xRemainingSeconds,
+                oRemain: self.oRemainingSeconds
+            )
+#endif
             try? await Task.sleep(nanoseconds: delayNanos)
 
             if Task.isCancelled {
@@ -560,6 +785,14 @@ final class GameViewModel {
                 return
             }
 
+#if DEBUG
+            GameDebugLogger.aiThinkEndDetailed(
+                active: scheduledMark,
+                xRemain: self.xRemainingSeconds,
+                oRemain: self.oRemainingSeconds
+            )
+#endif
+
             guard token == self.aiSequence else {
 #if DEBUG
                 GameDebugLogger.aiMoveIgnored(reason: "stale_token_after_sleep")
@@ -567,18 +800,21 @@ final class GameViewModel {
                 return
             }
 
-            guard self.remainingSeconds > 0 else {
-#if DEBUG
-                GameDebugLogger.aiMoveIgnored(reason: "timer_zero")
-#endif
-                return
-            }
             guard self.session.sessionState == .playing else {
 #if DEBUG
                 GameDebugLogger.aiMoveIgnored(reason: "session_not_playing")
 #endif
                 return
             }
+
+            if self.peekWallRemainingSeconds(for: scheduledMark) <= 0 {
+#if DEBUG
+                GameDebugLogger.aiMoveIgnored(reason: "timer_zero")
+#endif
+                self.completeForTimeExpiryIfNeeded(finishedMark: scheduledMark)
+                return
+            }
+
             guard self.session.gameMode == runningMode else {
 #if DEBUG
                 GameDebugLogger.aiMoveIgnored(reason: "mode_changed_mid_task")
@@ -642,20 +878,36 @@ final class GameViewModel {
             }
 
             let opponent = toPlay.nextInTurn
+            _ = self.updateClockBankFromDeadline(for: toPlay)
+            if self.secondsForMark(toPlay) <= 0 {
+#if DEBUG
+                GameDebugLogger.aiMoveIgnored(reason: "timer_zero_before_choice")
+#endif
+                self.completeForTimeExpiryIfNeeded(finishedMark: toPlay)
+                return
+            }
             let aiTimerCtx = AIMoveTimerContext(
-                remainingSeconds: self.remainingSeconds,
+                remainingSeconds: self.secondsForMark(toPlay),
                 totalSeconds: self.selectedDuration.seconds
             )
-            let difficulty: AIDifficulty = self.session.gameMode == .learning
+            let difficultyForMove: AIDifficulty = self.session.gameMode == .learning
                 ? self.learningProfile.adaptiveAIDifficulty()
                 : self.session.aiDifficulty
-            guard let cell = TicTacToeAI.chooseMove(
-                on: slab,
-                aiMark: toPlay,
-                humanMark: opponent,
-                difficulty: difficulty,
-                timerContext: aiTimerCtx
-            ) else {
+
+            let slabCopy = slab
+            let aiMarkSnapshot = toPlay
+            let humanMarkSnapshot = opponent
+            let cellOpt = await Task.detached(priority: .utility) {
+                await TicTacToeAI.chooseMove(
+                    on: slabCopy,
+                    aiMark: aiMarkSnapshot,
+                    humanMark: humanMarkSnapshot,
+                    difficulty: difficultyForMove,
+                    timerContext: aiTimerCtx
+                )
+            }.value
+
+            guard let cell = cellOpt else {
 #if DEBUG
                 self.recordAiVsAIInvalidIfNeeded()
                 GameDebugLogger.aiMoveIgnored(reason: "ai_choice_nil")
@@ -674,6 +926,14 @@ final class GameViewModel {
 #endif
 
             do {
+                _ = self.updateClockBankFromDeadline(for: toPlay)
+                if self.secondsForMark(toPlay) <= 0 {
+#if DEBUG
+                    GameDebugLogger.aiMoveIgnored(reason: "timer_zero_before_apply")
+#endif
+                    self.completeForTimeExpiryIfNeeded(finishedMark: toPlay)
+                    return
+                }
                 let beforeSnap = self.session
                 let applied = try GameEngine.applyMove(self.session, boardIndex: idx, cellIndex: cell)
                 self.session = applied
@@ -687,6 +947,7 @@ final class GameViewModel {
                     afterStats: applied.stats,
                     learningSuccessfulBlock: false
                 )
+                self.resyncClocksAfterMove(from: beforeSnap, to: applied)
 #if DEBUG
                 self.bumpAiVsAIBoardResetIfNeeded(before: beforeSnap, after: applied)
                 GameDebugLogger.aiMoveApplied(boardIndex: idx, cellIndex: cell, mark: toPlay)

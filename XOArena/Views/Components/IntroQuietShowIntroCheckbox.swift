@@ -4,12 +4,24 @@
 //
 
 import SwiftUI
+import UIKit
 
 /// Minimal paper-style checkbox (no UISwitch chrome). **`binding`** binds to **`AppStorage`** from parent.
 struct IntroQuietShowIntroCheckbox: View {
     @Environment(\.sgThemeMode) private var themeMode
 
     @Binding var isOn: Bool
+
+    /// Geometry-driven base (pt); scaled with **`.footnote`** metrics. Default matches pre-responsive intro.
+    var labelSizeBase: CGFloat = 11
+    /// Outer hand-drawn square side (pt).
+    var checkboxSide: CGFloat = 18
+
+    private var labelFont: Font {
+        let m = UIFontMetrics(forTextStyle: .footnote)
+        let size = m.scaledValue(for: labelSizeBase)
+        return .system(size: size, weight: .regular, design: .rounded)
+    }
 
     private var squareStroke: Color {
         SGColors.introTextSecondary.opacity(themeMode == .light ? 0.38 : 0.42)
@@ -32,10 +44,10 @@ struct IntroQuietShowIntroCheckbox: View {
                             .stroke(checkTint, style: StrokeStyle(lineWidth: 1.25, lineCap: .round, lineJoin: .round))
                     }
                 }
-                .frame(width: 18, height: 18)
+                .frame(width: checkboxSide, height: checkboxSide)
 
                 Text("Show intro on launch")
-                    .font(.system(size: 11, weight: .regular, design: .rounded))
+                    .font(labelFont)
                     .foregroundStyle(SGColors.introTextSecondary.opacity(0.62))
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)

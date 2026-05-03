@@ -8,9 +8,13 @@ import XCTest
 
 @MainActor
 final class GameTimerTests: XCTestCase {
+    private func makeVM(timer: MockGameTimerService) -> GameViewModel {
+        GameViewModel(timerService: timer, now: { timer.clock.date })
+    }
+
     func test_timer_starts_with_selected_duration() throws {
         let timer = MockGameTimerService()
-        let vm = GameViewModel(timerService: timer)
+        let vm = makeVM(timer: timer)
 
         vm.startNewGame(mode: .soloFocus, duration: .oneMinute)
 
@@ -22,7 +26,7 @@ final class GameTimerTests: XCTestCase {
 
     func test_timer_reaching_zero_completes_session() async throws {
         let timer = MockGameTimerService()
-        let vm = GameViewModel(timerService: timer)
+        let vm = makeVM(timer: timer)
 
         vm.startNewGame(mode: .soloFocus, duration: .oneMinute)
         timer.simulateFinish()
@@ -30,28 +34,30 @@ final class GameTimerTests: XCTestCase {
 
         XCTAssertEqual(vm.sessionState, .completed)
         XCTAssertEqual(vm.remainingSeconds, 0)
-        XCTAssertEqual(vm.completionReason, .timeExpired)
+        XCTAssertEqual(vm.completionReason, .xTimedOut)
         XCTAssertTrue(vm.isInputLocked)
     }
 
     func test_reset_restores_remaining_time() async throws {
         let timer = MockGameTimerService()
-        let vm = GameViewModel(timerService: timer)
+        let vm = makeVM(timer: timer)
 
         vm.startNewGame(mode: .localDuel, duration: .fiveMinutes)
-        timer.simulateTick(241)
+        timer.simulateSecondsPassed(59)
         await Task.yield()
         XCTAssertEqual(vm.remainingSeconds, 241)
 
         vm.resetGame()
         XCTAssertEqual(vm.remainingSeconds, 300)
+        XCTAssertEqual(vm.xRemainingSeconds, 300)
+        XCTAssertEqual(vm.oRemainingSeconds, 300)
         XCTAssertEqual(vm.selectedDuration, .fiveMinutes)
         XCTAssertEqual(vm.sessionState, .playing)
     }
 
     func test_new_session_uses_selected_duration() throws {
         let timer = MockGameTimerService()
-        let vm = GameViewModel(timerService: timer)
+        let vm = makeVM(timer: timer)
 
         vm.selectDuration(.oneMinute)
         vm.startNewGame(mode: .vsAI, duration: .oneMinute)
@@ -63,7 +69,7 @@ final class GameTimerTests: XCTestCase {
 
     func test_ai_does_not_move_after_timeout() async throws {
         let timer = MockGameTimerService()
-        let vm = GameViewModel(timerService: timer)
+        let vm = makeVM(timer: timer)
         vm.startNewGame(mode: .vsAI, duration: .oneMinute)
 
         vm.makeMove(boardIndex: 0, cellIndex: 0) // human X
@@ -78,12 +84,12 @@ final class GameTimerTests: XCTestCase {
             .count
         XCTAssertEqual(oCount, 0)
         XCTAssertEqual(vm.sessionState, .completed)
-        XCTAssertEqual(vm.completionReason, .timeExpired)
+        XCTAssertEqual(vm.completionReason, .oTimedOut)
     }
 
     func test_manual_move_cannot_happen_after_timeout() async throws {
         let timer = MockGameTimerService()
-        let vm = GameViewModel(timerService: timer)
+        let vm = makeVM(timer: timer)
         vm.startNewGame(mode: .soloFocus, duration: .oneMinute)
         timer.simulateFinish()
         await Task.yield()

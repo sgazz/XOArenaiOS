@@ -8,7 +8,7 @@ import SwiftUI
 struct ContentView: View {
     @State private var gameViewModel = GameViewModel()
     @State private var showGame = false
-    @State private var selectedDuration: GameDuration = .threeMinutes
+    @State private var selectedDuration: GameDuration = .oneMinute
     @StateObject private var themeManager = SGThemeManager()
 
     /// Mirrors **`@AppStorage("showIntro")`** for first-frame routing (see **`ContentView.readInitialShowSplash()`**).
@@ -39,6 +39,11 @@ struct ContentView: View {
                 NavigationStack {
                     MainMenuView(
                         selectedDuration: $selectedDuration,
+                        aiDifficulty: Binding(
+                            get: { gameViewModel.aiDifficulty },
+                            set: { gameViewModel.aiDifficulty = $0 }
+                        ),
+                        menuPlayModeBias: gameViewModel.gameMode,
                         onPractice: { duration in
                             gameViewModel.selectDuration(duration)
                             gameViewModel.startNewGame(mode: .soloFocus, duration: duration)

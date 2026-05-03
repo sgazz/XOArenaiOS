@@ -169,6 +169,59 @@ enum GameDebugLogger {
         )
     }
 
+    static func aiThink(delaySeconds: Double, remaining: Int, difficulty: String, reason: String) {
+        emit(
+            "AI_THINK delay=\(String(format: "%.3f", delaySeconds))s remaining=\(remaining)s difficulty=\(difficulty) reason=\(reason)"
+        )
+    }
+
+    /// Per-second (or finer) countdown visibility audit (**`clockTickDetailed`** preferiran).
+    static func clockTick(active: Mark?, xRemain: Int, oRemain: Int, isAIThinking: Bool) {
+        let a = active.map { markChar($0) } ?? "?"
+        emit("CLOCK_TICK active=\(a) x=\(xRemain) o=\(oRemain) isAIThinking=\(isAIThinking)")
+    }
+
+    static func clockTickDetailed(active: Mark, xBefore: Int, oBefore: Int, xAfter: Int, oAfter: Int) {
+        emit(
+            "CLOCK_TICK active=\(markChar(active)) xBefore=\(xBefore) oBefore=\(oBefore) xAfter=\(xAfter) oAfter=\(oAfter)"
+        )
+    }
+
+    static func clockSwitch(from: Mark, to: Mark, boardOneBased: Int) {
+        emit(
+            "CLOCK_SWITCH from=\(markChar(from)) to=\(markChar(to)) board=\(boardOneBased)"
+        )
+    }
+
+    static func drawBonusApplied(secondsEach: Int, xAfter: Int, oAfter: Int) {
+        emit("DRAW_BONUS +\(secondsEach) each x=\(xAfter) o=\(oAfter)")
+    }
+
+    static func timeOut(loser: Mark) {
+        guard loser == .x || loser == .o else { return }
+        emit("TIMEOUT loser=\(markChar(loser))")
+    }
+
+    static func aiThinkStartDetailed(active: Mark, xRemain: Int, oRemain: Int) {
+        emit(
+            "AI_THINK_START active=\(markChar(active)) x=\(xRemain) o=\(oRemain)"
+        )
+    }
+
+    static func aiThinkEndDetailed(active: Mark, xRemain: Int, oRemain: Int) {
+        emit(
+            "AI_THINK_END active=\(markChar(active)) x=\(xRemain) o=\(oRemain)"
+        )
+    }
+
+    static func aiThinkStart(remaining: Int) {
+        emit("AI_THINK_START remaining=\(remaining)s")
+    }
+
+    static func aiThinkEnd(remaining: Int) {
+        emit("AI_THINK_END remaining=\(remaining)s")
+    }
+
     static func aiMoveApplied(boardIndex: Int, cellIndex: Int, mark: Mark) {
         emit("AI_APPLY board=\(boardIndex + 1) mark=\(markChar(mark)) cell=\(cellIndex + 1)")
     }
@@ -247,6 +300,16 @@ enum GameDebugLogger {
         delayNanoseconds: UInt64,
         token: UInt64
     ) {}
+    static func aiThink(delaySeconds: Double, remaining: Int, difficulty: String, reason: String) {}
+    static func clockTick(active: Mark?, xRemain: Int, oRemain: Int, isAIThinking: Bool) {}
+    static func clockTickDetailed(active: Mark, xBefore: Int, oBefore: Int, xAfter: Int, oAfter: Int) {}
+    static func clockSwitch(from: Mark, to: Mark, boardOneBased: Int) {}
+    static func drawBonusApplied(secondsEach: Int, xAfter: Int, oAfter: Int) {}
+    static func timeOut(loser: Mark) {}
+    static func aiThinkStartDetailed(active: Mark, xRemain: Int, oRemain: Int) {}
+    static func aiThinkEndDetailed(active: Mark, xRemain: Int, oRemain: Int) {}
+    static func aiThinkStart(remaining: Int) {}
+    static func aiThinkEnd(remaining: Int) {}
     static func aiMoveApplied(boardIndex: Int, cellIndex: Int, mark: Mark) {}
     static func aiMoveIgnored(reason: String) {}
     static func testSummaryAiVsAI(

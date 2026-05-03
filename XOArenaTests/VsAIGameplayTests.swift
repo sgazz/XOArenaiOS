@@ -9,9 +9,13 @@ import XCTest
 /// **`GameMode.vsAI`** host rules versus **`GameViewModel`** (timer AI delay, **`HumanInputGate`**, reset / expiry cancelling central AI).
 @MainActor
 final class VsAIGameplayTests: XCTestCase {
+    private func makeVM(timer: MockGameTimerService) -> GameViewModel {
+        GameViewModel(timerService: timer, now: { timer.clock.date })
+    }
+
     func test_vsAI_gate_rejects_human_while_AI_thinking_mid_delay() async throws {
         let timer = MockGameTimerService()
-        let vm = GameViewModel(timerService: timer)
+        let vm = makeVM(timer: timer)
         vm.startNewGame(mode: .vsAI, duration: .oneMinute)
 
         vm.makeMove(boardIndex: 0, cellIndex: 0)
@@ -24,7 +28,7 @@ final class VsAIGameplayTests: XCTestCase {
 
     func test_vsAI_human_X_locked_after_first_move_waiting_for_O() throws {
         let timer = MockGameTimerService()
-        let vm = GameViewModel(timerService: timer)
+        let vm = makeVM(timer: timer)
 
         vm.startNewGame(mode: .vsAI, duration: .oneMinute)
         XCTAssertFalse(vm.isInputLocked)
@@ -38,7 +42,7 @@ final class VsAIGameplayTests: XCTestCase {
 
     func test_vsAI_human_rejected_after_session_completed_via_timer() async throws {
         let timer = MockGameTimerService()
-        let vm = GameViewModel(timerService: timer)
+        let vm = makeVM(timer: timer)
         vm.startNewGame(mode: .vsAI, duration: .oneMinute)
 
         let before = vm.stats.totalMoves
@@ -55,7 +59,7 @@ final class VsAIGameplayTests: XCTestCase {
 
     func test_vsAI_reset_without_stray_AI_marks_after_immediate_human_X() async throws {
         let timer = MockGameTimerService()
-        let vm = GameViewModel(timerService: timer)
+        let vm = makeVM(timer: timer)
         vm.startNewGame(mode: .vsAI, duration: .oneMinute)
 
         vm.makeMove(boardIndex: 0, cellIndex: 0)
@@ -83,18 +87,27 @@ final class VsAIGameplayTests: XCTestCase {
     func test_vsAI_seeded_O_starter_active_slab_gets_O_from_central_ai() async throws {
         var seeded = GameEngine.makeInitialSession(mode: .vsAI)
         seeded.activeBoardIndex = 3
-        seeded.boards[3].startingMark = .o
-        seeded.boards[3].turnPhase = .firstMove
+        var slab = seeded.boards[3]
+        slab.startingMark = .o
+        slab.turnPhase = .firstMove
+        seeded.boards[3] = slab
 
-        let vm = GameViewModel(session: seeded, timerService: MockGameTimerService())
+        let timer = MockGameTimerService()
+        let vm = GameViewModel(session: seeded, timerService: timer, now: { timer.clock.date })
+        vm.aiThinkDelayNanosecondsOverrideForTests = 0
         vm.onGameViewAppear()
-        try await Task.sleep(nanoseconds: 700_000_000)
         await Task.yield()
+
+        await waitUntil(
+            "O opens board 3 via central AI then turn passes to X",
+            timeoutNs: 3_000_000_000
+        ) {
+            vm.boards[3].cells.filter { $0.mark == .o }.count == 1 && vm.currentMark == .x
+        }
 
         XCTAssertEqual(vm.activeBoardIndex, 3)
         XCTAssertEqual(vm.boards[3].startingMark, .o)
-        let oCount = vm.boards[3].cells.filter { $0.mark == .o }.count
-        XCTAssertEqual(oCount, 1, "When **`nextStarter`** is **O** and slab is active, central AI should open as **O**.")
+        XCTAssertEqual(vm.boards[3].cells.filter { $0.mark == .o }.count, 1)
         XCTAssertEqual(vm.currentMark, .x)
     }
 }

@@ -21,7 +21,7 @@ enum GameEngine: Sendable {
             boards: Array(repeating: XOBoard.empty, count: GameConstants.boardCount),
             activeBoardIndex: 0,
             gameMode: .soloFocus,
-            aiDifficulty: .hard,
+            aiDifficulty: .easy,
             stats: .zero,
             sessionState: .notStarted
         )
@@ -34,7 +34,7 @@ enum GameEngine: Sendable {
             boards: boards,
             activeBoardIndex: 0,
             gameMode: mode,
-            aiDifficulty: .hard,
+            aiDifficulty: .easy,
             stats: .zero,
             sessionState: .playing
         )

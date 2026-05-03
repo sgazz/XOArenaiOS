@@ -17,16 +17,25 @@ struct SGEngravedTextButtonStyle: ButtonStyle {
 
     var variant: SGEngravedTextButtonVariant
     var primaryFont: Font
+    var secondaryFont: Font
+    var timerFontSelected: Font
+    var timerFontUnselected: Font
     /// `nil` = podrazumevani tus kamena po **`sgThemeMode`**.
     var primaryInk: Color?
 
     init(
         variant: SGEngravedTextButtonVariant,
         primaryFont: Font = Font.system(.body, design: .rounded).weight(.semibold),
+        secondaryFont: Font = Font.system(.body, design: .rounded).weight(.medium),
+        timerFontSelected: Font = Font.system(.subheadline, design: .rounded).weight(.semibold),
+        timerFontUnselected: Font = Font.system(.subheadline, design: .rounded),
         primaryInk: Color? = nil
     ) {
         self.variant = variant
         self.primaryFont = primaryFont
+        self.secondaryFont = secondaryFont
+        self.timerFontSelected = timerFontSelected
+        self.timerFontUnselected = timerFontUnselected
         self.primaryInk = primaryInk
     }
 
@@ -47,7 +56,7 @@ struct SGEngravedTextButtonStyle: ButtonStyle {
 
             case .secondary(let opacity):
                 configuration.label
-                    .font(Font.system(.body, design: .rounded).weight(.medium))
+                    .font(secondaryFont)
                     .foregroundStyle(resolvedInk)
                     .opacity(opacity)
                     .multilineTextAlignment(.center)
@@ -56,12 +65,12 @@ struct SGEngravedTextButtonStyle: ButtonStyle {
             case .timerOption(let selected):
                 if selected {
                     configuration.label
-                        .font(Font.system(.subheadline, design: .rounded).weight(.semibold))
+                        .font(timerFontSelected)
                         .foregroundStyle(resolvedInk)
                         .sgEngravedText(intensity: .medium, isPressed: pressed, color: resolvedInk)
                 } else {
                     configuration.label
-                        .font(Font.system(.subheadline, design: .rounded))
+                        .font(timerFontUnselected)
                         .foregroundStyle(resolvedInk)
                         .opacity(0.4)
                 }
