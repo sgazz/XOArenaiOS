@@ -3,12 +3,12 @@
 //  XOArenaWatch
 //
 
+import Combine
 import Foundation
-import Observation
 
+/// Watch gameplay hub: **`ObservableObject` + `@Published`** so slab UI always flows from **`visibleBoardCells`** / **`visibleBoardID`**, never from raw **`GameSession`** in views.
 @MainActor
-@Observable
-final class WatchGameCoordinator {
+final class WatchGameCoordinator: ObservableObject {
     enum Route: Equatable {
         case intro
         case setup
@@ -29,55 +29,36 @@ final class WatchGameCoordinator {
         case draw
     }
 
-    /// Immutable value snapshot for SwiftUI (**watch-only**); avoids stale nested session reads.
-    /// `cells`: `nil` = empty square; **`id`** ties **`boardIndex` + `renderVersion`** so the grid reinstantiates every rebuild.
-    struct WatchBoardRenderState: Equatable, Identifiable {
-        let id: String
-        let boardIndex: Int
-        let boardDisplay: Int
-        let cells: [Mark?]
-        let phase: BoardPlayState
-        let renderVersion: Int
+    @Published var route: Route = .intro
 
-        init(boardIndex: Int, renderVersion: Int, cells: [Mark?], phase: BoardPlayState) {
-            self.boardIndex = boardIndex
-            self.boardDisplay = boardIndex + 1
-            self.renderVersion = renderVersion
-            self.cells = cells
-            self.phase = phase
-            self.id = "\(boardIndex)-\(renderVersion)"
-        }
-    }
+    @Published var setupSymbol: PlayerSymbolChoice = .x
+    @Published var setupFirst: FirstMoverChoice = .player
+    @Published var setupDuration: GameDuration = .oneMinute
 
-    var route: Route = .intro
-
-    var setupSymbol: PlayerSymbolChoice = .x
-    var setupFirst: FirstMoverChoice = .player
-    var setupDuration: GameDuration = .oneMinute
-
-    private(set) var session: GameSession = GameEngine.makeIdleSession()
-    private(set) var isAIThinking: Bool = false
+    @Published private(set) var session: GameSession = GameEngine.makeIdleSession()
+    @Published private(set) var isAIThinking: Bool = false
+    /// Watch-only: completed slab frozen ~0.35s before **`syncFromEngine`** catches **`activeBoardIndex`** advance.
+    @Published private(set) var isBoardPreviewing: Bool = false
 
     /// Single match countdown (wall clock from first game screen).
-    private(set) var matchSecondsRemaining: Int = 0
+    @Published private(set) var matchSecondsRemaining: Int = 0
 
-    private(set) var boardFeedback: BoardFeedback?
-    private(set) var showLowTimeHint: Bool = false
+    @Published private(set) var boardFeedback: BoardFeedback?
+    @Published private(set) var showLowTimeHint: Bool = false
 
-    /// Single source of truth for the board grid (`@Observable` tracks assignments; same role as **`@Published`** on an observable object).
-    private(set) var boardRenderState: WatchBoardRenderState = WatchBoardRenderState(
-        boardIndex: 0,
-        renderVersion: 0,
-        cells: Array(repeating: nil, count: GameConstants.cellCount),
-        phase: .inProgress
-    )
-
-    private var boardRenderGeneration: Int = 0
+    /// Grid shown on Watch (**ONLY** **`""`** / **`"X"`** / **`"O"`**); paired with **`visibleBoardID`** for hard invalidation.
+    @Published var visibleBoardCells: [String] = Array(repeating: "", count: 9)
+    @Published var visibleBoardID = UUID()
+    /// Must match **`session.activeBoardIndex`** after every **`syncFromEngine`** (diagnostic / hero alignment).
+    @Published private(set) var visibleBoardIndex: Int = 0
+    /// Slab **`playState == .inProgress`** (synced alongside strings).
+    @Published private(set) var visibleBoardAllowsMoves: Bool = false
 
     private var matchTimer: Timer?
     private var feedbackReset: Task<Void, Never>?
     private var aiSequence: UInt64 = 0
     private var aiTask: Task<Void, Never>?
+    private var boardPreviewTask: Task<Void, Never>?
 
     private var humanMark: Mark { setupSymbol.mark }
     private var aiMark: Mark { humanMark.nextInTurn }
@@ -86,7 +67,7 @@ final class WatchGameCoordinator {
     var activeBoardIndex: Int { session.activeBoardIndex }
     var currentMark: Mark { session.currentMarkForActiveBoard }
 
-    /// Match clock for compact hero bar (**`m:ss`**, monospaced in UI).
+    /// Match clock for compact hero bar (**`m:ss`**).
     var remainingTimeText: String {
         let t = max(0, matchSecondsRemaining)
         let m = t / 60
@@ -94,26 +75,23 @@ final class WatchGameCoordinator {
         return String(format: "%d:%02d", m, s)
     }
 
-    /// Human slab wins (vsAI uses **`humanControlledMark`** when set).
     var playerScore: Int {
         let hMark = session.humanControlledMark ?? humanMark
         return hMark == .x ? session.stats.xBoardWins : session.stats.oBoardWins
     }
 
-    /// AI slab wins.
     var aiScore: Int {
         let hMark = session.humanControlledMark ?? humanMark
         let aiM = hMark.nextInTurn
         return aiM == .x ? session.stats.xBoardWins : session.stats.oBoardWins
     }
 
-    /// Single-line score for hero bar (**You / AI** labels).
     var scoreText: String {
         "You \(playerScore) · AI \(aiScore)"
     }
 
     init() {
-        rebuildBoardRenderState()
+        syncFromEngine(reason: "init")
     }
 
     func tapIntroAdvance() {
@@ -122,6 +100,7 @@ final class WatchGameCoordinator {
 
     func beginMatchFromSetup() {
         cancelFeedback()
+        cancelBoardPreviewTask()
         cancelAITask()
         matchTimer?.invalidate()
         matchTimer = nil
@@ -136,19 +115,21 @@ final class WatchGameCoordinator {
         route = .game
         matchSecondsRemaining = setupDuration.seconds
         showLowTimeHint = false
-        rebuildBoardRenderState()
+        syncFromEngine(reason: "beginMatch")
         scheduleAIMoveIfNeeded(context: "beginMatchFromSetup")
     }
 
     func onGameAppear() {
         guard case .game = route else { return }
         guard matchSecondsRemaining > 0, session.sessionState == .playing else { return }
+        syncFromEngine(reason: "onGameAppear")
         startMatchTickerIfNeeded()
         scheduleAIMoveIfNeeded(context: "onGameAppear")
     }
 
     func onGameDisappear() {
         stopMatchTicker()
+        cancelBoardPreviewTask()
         cancelAITask()
     }
 
@@ -181,31 +162,33 @@ final class WatchGameCoordinator {
 
     private func finishMatchTimeUp() {
         stopMatchTicker()
+        cancelBoardPreviewTask()
         cancelAITask()
         var s = session
         s.sessionState = .completed
         session = s
-        rebuildBoardRenderState()
+        syncFromEngine(reason: "finishMatchTimeUp")
         WatchHaptics.matchEnd()
         route = .end(buildSummary())
     }
 
     func playAgain() {
         cancelFeedback()
+        cancelBoardPreviewTask()
         route = .setup
         session = GameEngine.makeIdleSession()
-        rebuildBoardRenderState()
+        syncFromEngine(reason: "playAgain")
         isAIThinking = false
         matchSecondsRemaining = 0
         showLowTimeHint = false
     }
 
-    func cellTapped(cellIndex: Int) {
+    func handleCellTap(_ cellIndex: Int) {
         let boardIdx = activeBoardIndex
         guard HumanInputGate.permitsCellPlacement(
             gameMode: session.gameMode,
             sessionState: session.sessionState,
-            isAIThinking: isAIThinking,
+            isAIThinking: isAIThinking || isBoardPreviewing,
             currentMark: currentMark,
             boardPlayState: boards[boardIdx].playState,
             cellMark: boards[boardIdx].cells[cellIndex].mark,
@@ -218,19 +201,76 @@ final class WatchGameCoordinator {
 
         let before = session.stats
         do {
+            let movedBoardIndex = session.activeBoardIndex
+            print("[XOArenaWatch] BEFORE_HUMAN_MOVE engineBoard=\(movedBoardIndex + 1)")
             session = try GameEngine.applyMove(session, boardIndex: boardIdx, cellIndex: cellIndex)
-            rebuildBoardRenderState()
+            let newBoardIndex = session.activeBoardIndex
+            let didAdvanceBoard = newBoardIndex != movedBoardIndex
+            print("[XOArenaWatch] AFTER_HUMAN_MOVE engineBoard=\(newBoardIndex + 1)")
             WatchHaptics.move()
             #if DEBUG
             debugLog(
                 "[XOArenaWatch] PLAYER_MOVE \(WatchDebugLogFormatting.boardCellLine(boardIndex: boardIdx, cellIndex: cellIndex))"
             )
             #endif
-            maybePresentBoardFeedback(before: before, after: session.stats)
-            scheduleAIMoveIfNeeded(context: "afterPlayerMove")
+
+            if didAdvanceBoard {
+                isBoardPreviewing = true
+                applyCompletedBoardPreview(boardIndex: movedBoardIndex)
+                maybePresentBoardFeedback(before: before, after: session.stats)
+                boardPreviewTask?.cancel()
+                boardPreviewTask = Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: 350_000_000)
+                    guard let self, !Task.isCancelled else { return }
+                    self.isBoardPreviewing = false
+                    self.boardPreviewTask = nil
+                    self.syncFromEngine(reason: "afterBoardPreviewDelay")
+                    guard self.session.sessionState == .playing else { return }
+                    self.scheduleAIMoveIfNeeded(context: "afterBoardPreview")
+                }
+            } else {
+                syncFromEngine(reason: "afterHumanApplyMove")
+                maybePresentBoardFeedback(before: before, after: session.stats)
+                scheduleAIMoveIfNeeded(context: "afterPlayerMove")
+            }
         } catch {
             WatchHaptics.invalid()
         }
+    }
+
+    /// Canonical copy from **`session.activeBoardIndex`** → published grid (**watch-only diagnostic path**).
+    private func syncFromEngine(reason: String) {
+        let engineBoardIndex = session.activeBoardIndex
+
+        let nextStrings: [String]
+        let allows: Bool
+
+        if session.boards.indices.contains(engineBoardIndex) {
+            let board = session.boards[engineBoardIndex]
+            visibleBoardIndex = engineBoardIndex
+            allows = board.playState == .inProgress
+            var row = board.cells.prefix(GameConstants.cellCount).map { cell -> String in
+                switch cell.mark {
+                case .x: return "X"
+                case .o: return "O"
+                case .empty: return ""
+                }
+            }
+            while row.count < GameConstants.cellCount { row.append("") }
+            nextStrings = Array(row.prefix(GameConstants.cellCount))
+        } else {
+            visibleBoardIndex = engineBoardIndex
+            nextStrings = Array(repeating: "", count: GameConstants.cellCount)
+            allows = false
+        }
+
+        visibleBoardAllowsMoves = allows
+        visibleBoardCells = nextStrings
+        visibleBoardID = UUID()
+
+        let eng = engineBoardIndex + 1
+        let vis = visibleBoardIndex + 1
+        print("[XOArenaWatch] SYNC reason=\(reason) engineBoard=\(eng) visibleBoard=\(vis) cells=\(visibleBoardCells)")
     }
 
     private func maybePresentBoardFeedback(before: GameStats, after: GameStats) {
@@ -281,7 +321,31 @@ final class WatchGameCoordinator {
         isAIThinking = false
     }
 
-    /// Schedules **`TicTacToeAI`** when **`currentMark`** is the AI symbol (first move **Second**, after human move, board transition / reset → engine updates turn).
+    private func cancelBoardPreviewTask() {
+        boardPreviewTask?.cancel()
+        boardPreviewTask = nil
+        isBoardPreviewing = false
+    }
+
+    /// Watch-only: show **`session.boards[boardIndex]`** (e.g. just-completed slab) before **`activeBoardIndex`** catches up in UI.
+    private func applyCompletedBoardPreview(boardIndex: Int) {
+        guard session.boards.indices.contains(boardIndex) else { return }
+        let board = session.boards[boardIndex]
+        visibleBoardIndex = boardIndex
+        var row = board.cells.prefix(GameConstants.cellCount).map { cell -> String in
+            switch cell.mark {
+            case .x: return "X"
+            case .o: return "O"
+            case .empty: return ""
+            }
+        }
+        while row.count < GameConstants.cellCount { row.append("") }
+        visibleBoardCells = Array(row.prefix(GameConstants.cellCount))
+        visibleBoardAllowsMoves = false
+        visibleBoardID = UUID()
+        print("[XOArenaWatch] BOARD_PREVIEW boardDisplay=\(boardIndex + 1) cells=\(visibleBoardCells)")
+    }
+
     private func scheduleAIMoveIfNeeded(context: String) {
         let board = activeBoardIndex
         let mark = currentMark
@@ -292,6 +356,7 @@ final class WatchGameCoordinator {
                 && mark == aiSymbol
                 && session.sessionState == .playing
                 && matchSecondsRemaining > 0
+                && !isBoardPreviewing
                 && !isAIThinking
                 && aiTask == nil
                 && boards.indices.contains(board)
@@ -318,6 +383,10 @@ final class WatchGameCoordinator {
         }
         guard matchSecondsRemaining > 0 else {
             debugLogSkip("match_clock_exhausted")
+            return
+        }
+        guard !isBoardPreviewing else {
+            debugLogSkip("board_preview_active")
             return
         }
         guard !isAIThinking else {
@@ -348,10 +417,12 @@ final class WatchGameCoordinator {
             defer {
                 self.isAIThinking = false
                 self.aiTask = nil
+                self.syncFromEngine(reason: "aiTaskDeferMainActor")
                 self.scheduleAIMoveIfNeeded(context: "afterAIMoveDefer")
             }
 
             self.isAIThinking = true
+            self.syncFromEngine(reason: "aiBeforeDelay")
 
             let slabSnapshot = self.session.boards[scheduledBoard]
             let variationSeed = UInt64(self.aiSequence &* 1_049_867) ^ (UInt64(scheduledBoard) << 32)
@@ -366,6 +437,7 @@ final class WatchGameCoordinator {
             )
 
             try? await Task.sleep(nanoseconds: computed.nanoseconds)
+            self.syncFromEngine(reason: "aiAfterSleepMainActor")
 
             guard !Task.isCancelled, token == self.aiSequence else {
                 self.debugLog("[XOArenaWatch] AI_AUTO_SKIP reason=ai_task_cancelled_or_stale_token")
@@ -390,6 +462,8 @@ final class WatchGameCoordinator {
                 self.finishMatchTimeUp()
                 return
             }
+
+            self.syncFromEngine(reason: "aiBeforeChooseMove")
 
             let activeSlab = self.session.boards[self.session.activeBoardIndex]
             guard activeSlab.playState == .inProgress else {
@@ -440,11 +514,26 @@ final class WatchGameCoordinator {
                 self.debugLog(
                     "[XOArenaWatch] AI_AUTO_MOVE \(WatchDebugLogFormatting.boardCellLine(boardIndex: scheduledBoard, cellIndex: cell))"
                 )
+                let movedBoardIndex = self.session.activeBoardIndex
+                print("[XOArenaWatch] BEFORE_AI_MOVE engineBoard=\(movedBoardIndex + 1)")
                 let next = try GameEngine.applyMove(self.session, boardIndex: scheduledBoard, cellIndex: cell)
                 self.session = next
-                self.rebuildBoardRenderState()
+                let newBoardIndex = self.session.activeBoardIndex
+                let didAdvanceBoard = newBoardIndex != movedBoardIndex
+                print("[XOArenaWatch] AFTER_AI_MOVE engineBoard=\(newBoardIndex + 1)")
                 WatchHaptics.move()
-                self.maybePresentBoardFeedback(before: before, after: next.stats)
+
+                if didAdvanceBoard {
+                    self.isBoardPreviewing = true
+                    self.applyCompletedBoardPreview(boardIndex: movedBoardIndex)
+                    self.maybePresentBoardFeedback(before: before, after: next.stats)
+                    try? await Task.sleep(nanoseconds: 350_000_000)
+                    self.isBoardPreviewing = false
+                    self.syncFromEngine(reason: "afterBoardPreviewDelay")
+                } else {
+                    self.syncFromEngine(reason: "afterAIApplyMove")
+                    self.maybePresentBoardFeedback(before: before, after: next.stats)
+                }
             } catch {
                 WatchHaptics.invalid()
                 self.debugLog(
@@ -454,47 +543,10 @@ final class WatchGameCoordinator {
         }
     }
 
-    /// Aligns with **`GameEngine`** / **`makeInitialSession`** (`humanControlledMark` + opposite = AI).
     private func aiMarkViaSession() -> Mark {
         (session.humanControlledMark ?? .x).nextInTurn
     }
 
-    /// Replaces the entire grid snapshot after every session mutation that can change the active slab (**human / AI / advance / reset / match start**).
-    private func rebuildBoardRenderState() {
-        boardRenderGeneration += 1
-        let rv = boardRenderGeneration
-        let idx = session.activeBoardIndex
-
-        let cells: [Mark?]
-        let phase: BoardPlayState
-
-        if session.boards.indices.contains(idx) {
-            let slab = session.boards[idx]
-            let mapped = slab.cells.map { cell -> Mark? in
-                switch cell.mark {
-                case .empty: return nil
-                case .x: return .x
-                case .o: return .o
-                }
-            }
-            cells = mapped.count == GameConstants.cellCount
-                ? mapped
-                : Array(repeating: nil, count: GameConstants.cellCount)
-            phase = slab.playState
-        } else {
-            cells = Array(repeating: nil, count: GameConstants.cellCount)
-            phase = .inProgress
-        }
-
-        boardRenderState = WatchBoardRenderState(boardIndex: idx, renderVersion: rv, cells: cells, phase: phase)
-
-        #if DEBUG
-        let cellsLog = cells.map { $0?.rawValue ?? "empty" }.joined(separator: ",")
-        debugLog("[XOArenaWatch] RENDER_REBUILD version=\(rv) boardDisplay=\(boardRenderState.boardDisplay) cells=\(cellsLog)")
-        #endif
-    }
-
-    /// Debug-only wording: **`boardDisplay`/`cellDisplay`** match one-based numbering used in **`GameEngine`** logs.
     private enum WatchDebugLogFormatting {
         static func boardTag(boardIndex: Int) -> String {
             "boardIndex=\(boardIndex) boardDisplay=\(boardIndex + 1)"

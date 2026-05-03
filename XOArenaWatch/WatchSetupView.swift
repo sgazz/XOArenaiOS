@@ -6,7 +6,7 @@
 import SwiftUI
 
 struct WatchSetupView: View {
-    @Bindable var coordinator: WatchGameCoordinator
+    @ObservedObject var coordinator: WatchGameCoordinator
 
     var body: some View {
         ScrollView {

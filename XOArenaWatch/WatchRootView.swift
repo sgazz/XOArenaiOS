@@ -6,10 +6,9 @@
 import SwiftUI
 
 struct WatchRootView: View {
-    @State private var coordinator = WatchGameCoordinator()
+    @StateObject private var coordinator = WatchGameCoordinator()
 
     var body: some View {
-        @Bindable var coordinator = coordinator
         Group {
             switch coordinator.route {
             case .intro:

@@ -6,7 +6,7 @@
 import SwiftUI
 
 struct WatchGameView: View {
-    @Bindable var coordinator: WatchGameCoordinator
+    @ObservedObject var coordinator: WatchGameCoordinator
 
     var body: some View {
         ZStack {
@@ -25,16 +25,20 @@ struct WatchGameView: View {
                         .padding(.bottom, 2)
                 }
 
+                // TEMP diagnostic: must match engine active board (1-based).
+                Text("B\(coordinator.visibleBoardIndex + 1)")
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(WatchColors.accent)
+                    .padding(.bottom, 2)
+
                 ZStack {
                     WatchBoardView(
-                        cells: coordinator.boardRenderState.cells,
-                        phase: coordinator.boardRenderState.phase,
-                        locked: coordinator.isAIThinking
-                    ) { idx in
-                        coordinator.cellTapped(cellIndex: idx)
-                    }
-                    .id(coordinator.boardRenderState.id)
-                    .transition(.opacity)
+                        cells: coordinator.visibleBoardCells,
+                        boardID: coordinator.visibleBoardID,
+                        locked: coordinator.isAIThinking || coordinator.isBoardPreviewing,
+                        allowsInput: coordinator.visibleBoardAllowsMoves,
+                        onTap: { coordinator.handleCellTap($0) }
+                    )
 
                     if let fb = coordinator.boardFeedback {
                         Text(feedbackText(fb))
@@ -46,11 +50,8 @@ struct WatchGameView: View {
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                                     .fill(WatchColors.cell.opacity(0.92))
                             )
-                            .transition(.scale.combined(with: .opacity))
                     }
                 }
-                .animation(.easeInOut(duration: 0.22), value: coordinator.boardRenderState.renderVersion)
-                .animation(.easeOut(duration: 0.15), value: coordinator.boardFeedback)
             }
         }
         .onAppear { coordinator.onGameAppear() }
