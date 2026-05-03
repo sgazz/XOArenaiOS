@@ -184,7 +184,7 @@ struct MainMenuView: View {
     @State private var menuPlayFocus: MainMenuPlayFocus = .pvAI
 
     let onPractice: (GameDuration) -> Void
-    let onVsAI: (GameDuration) -> Void
+    let onVsAI: () -> Void
     let onLearning: (GameDuration) -> Void
     let onLocalDuel: (GameDuration) -> Void
     var onAiVsAITest: ((GameDuration) -> Void)? = nil
@@ -332,7 +332,7 @@ struct MainMenuView: View {
         Button {
             HapticService.lightImpact()
             menuPlayFocus = .pvAI
-            onVsAI(selectedDuration)
+            onVsAI()
         } label: {
             Text("PvAI")
                 .frame(maxWidth: .infinity)

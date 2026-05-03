@@ -1,129 +1,109 @@
 ---
+description: 
 alwaysApply: true
 ---
 
-{\rtf1\ansi\ansicpg1252\cocoartf2869
-\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
-{\colortbl;\red255\green255\blue255;}
-{\*\expandedcolortbl;;}
-\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
-\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+Create SG Quiet Design System starter.
 
-\f0\fs24 \cf0 Create a reusable SG Quiet System Starter Pack for this project.\
-\
-Goal:\
-Build a small, clean design foundation that I can reuse across my apps, games, and tools.\
-\
-Use SG Quiet System:\
-- pure minimalism\
-- calm UI\
-- neutral colors\
-- strong spacing\
-- subtle borders\
-- accent only when meaningful\
-- no visual noise\
-- no heavy gradients\
-- no glassmorphism overload\
-- no decorative clutter\
-\
-Create the following structure if it does not already exist:\
-\
-For SwiftUI project:\
-\
-DesignSystem/\
-  SGColors.swift\
-  SGSpacing.swift\
-  SGTypography.swift\
-  SGRadius.swift\
-  SGShadows.swift\
-  SGButton.swift\
-  SGCard.swift\
-  SGInput.swift\
-  SGToolbarStyle.swift\
-\
-For web project:\
-\
-src/design-system/\
-  tokens.ts\
-  components/\
-    SGButton.tsx\
-    SGCard.tsx\
-    SGInput.tsx\
-    SGToolbar.tsx\
-\
-If this project is SwiftUI, implement SwiftUI files.\
-If this project is web/React/Next.js, implement web files.\
-If both exist, ask before implementing both.\
-\
-Design tokens:\
-\
-Colors:\
-- paperLight: #F8F5EE\
-- paperDark: #232220\
-- surfaceLight: #FFFFFF\
-- surfaceDark: #2C2C2C\
-- textLight: #1C1C1C\
-- textDark: #F5F5F5\
-- textSecondary: #8A8A8A\
-- accent: #9D42F0\
-- accentSubtle: #CFA8FF\
-- borderLight: #E5E5E5\
-- borderDark: #3A3A3A\
-\
-Spacing:\
-- xs: 4\
-- sm: 8\
-- md: 16\
-- lg: 24\
-- xl: 32\
-- xxl: 48\
-\
-Radius:\
-- sm: 6\
-- md: 10\
-- lg: 16\
-- pill: 999\
-\
-Typography:\
-- body: 16 regular\
-- small: 12\'9614 regular\
-- sectionTitle: 18\'9622 medium/semibold\
-- mainTitle: 28\'9634 semibold\
-- use SF Pro on Apple platforms\
-- use Inter or system sans on web\
-\
-Component rules:\
-\
-SGButton:\
-- height around 44\
-- subtle border\
-- medium radius\
-- primary variant uses accent\
-- secondary variant is quiet/neutral\
-- disabled state uses opacity\
-\
-SGCard:\
-- subtle border\
-- soft background\
-- no heavy shadow\
-- internal padding md/lg\
-- radius lg\
-\
-SGInput:\
-- calm border\
-- accent focus state\
-- readable text\
-- no aggressive styling\
-\
-SGToolbar:\
-- minimal\
-- compact\
-- icon-friendly\
-- supports horizontal layout\
-- should not dominate screen\
-\
-Important:\
-- Do not break existing app logic.\
-- Do not refactor unrelated files.\
-- Use design tokens instead of hardcoded random values.\
-- After creating files, show me exactly what was added and how to use the components in one example screen.}
+Goal:
+Reusable minimal design foundation.
+
+Style:
+- minimal, calm
+- neutral colors
+- strong spacing
+- subtle borders
+- minimal accent
+- no visual noise, heavy gradients, or clutter
+
+Structure:
+
+SwiftUI:
+DesignSystem/
+- SGColors.swift
+- SGSpacing.swift
+- SGTypography.swift
+- SGRadius.swift
+- SGShadows.swift
+- SGButton.swift
+- SGCard.swift
+- SGInput.swift
+- SGToolbarStyle.swift
+
+Web:
+src/design-system/
+- tokens.ts
+- components/
+  - SGButton.tsx
+  - SGCard.tsx
+  - SGInput.tsx
+  - SGToolbar.tsx
+
+Rules:
+- If SwiftUI → implement SwiftUI
+- If web → implement web
+- If both → ask first
+
+Tokens:
+
+Colors:
+paperLight #F8F5EE
+paperDark #232220
+surfaceLight #FFFFFF
+surfaceDark #2C2C2C
+textLight #1C1C1C
+textDark #F5F5F5
+textSecondary #8A8A8A
+accent #9D42F0
+accentSubtle #CFA8FF
+borderLight #E5E5E5
+borderDark #3A3A3A
+
+Spacing:
+4, 8, 16, 24, 32, 48
+
+Radius:
+6, 10, 16, 999
+
+Typography:
+body 16
+small 12
+sectionTitle 18 semibold
+mainTitle 28 semibold
+SF Pro (Apple), Inter/system (web)
+
+Components:
+
+SGButton:
+- ~44 height
+- subtle border
+- medium radius
+- primary = accent
+- secondary = neutral
+- disabled = opacity
+
+SGCard:
+- subtle border
+- soft bg
+- padding md/lg
+- radius lg
+
+SGInput:
+- calm border
+- accent focus
+- readable
+
+SGToolbar:
+- minimal, compact
+- horizontal
+- non-dominant
+
+Constraints:
+- do not break logic
+- no unrelated refactor
+- use tokens only
+
+Output:
+- create files
+- show added files
+- give 1 usage example

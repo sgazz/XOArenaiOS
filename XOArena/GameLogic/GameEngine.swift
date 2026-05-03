@@ -23,21 +23,45 @@ enum GameEngine: Sendable {
             gameMode: .soloFocus,
             aiDifficulty: .easy,
             stats: .zero,
-            sessionState: .notStarted
+            sessionState: .notStarted,
+            humanControlledMark: nil
         )
     }
 
-    /// Playable lobby: **X** opens; every board blank; rotation starts at slab `0`.
-    static func makeInitialSession(mode: GameMode) -> GameSession {
-        let boards = Array(repeating: XOBoard.empty, count: GameConstants.boardCount)
+    /// Playable lobby: svaka tabla **`startingMark`** prema modu; **vsAI**/**learning** mogu zadati čoveka i ko prvi igra.
+    static func makeInitialSession(
+        mode: GameMode,
+        humanControlledMark: Mark? = nil,
+        firstMover: FirstMoverChoice? = nil
+    ) -> GameSession {
+        let boards: [XOBoard]
+        let human: Mark?
+        switch mode {
+        case .vsAI, .learning:
+            let h = humanControlledMark ?? .x
+            human = h
+            let ai = h.nextInTurn
+            let starter: Mark = ((firstMover ?? .player) == .player) ? h : ai
+            boards = Array(repeating: boardEmptyWithStarter(starter), count: GameConstants.boardCount)
+        default:
+            human = nil
+            boards = Array(repeating: XOBoard.empty, count: GameConstants.boardCount)
+        }
         return GameSession(
             boards: boards,
             activeBoardIndex: 0,
             gameMode: mode,
             aiDifficulty: .easy,
             stats: .zero,
-            sessionState: .playing
+            sessionState: .playing,
+            humanControlledMark: human
         )
+    }
+
+    private static func boardEmptyWithStarter(_ starter: Mark) -> XOBoard {
+        var b = XOBoard.empty
+        b.startingMark = starter
+        return b
     }
 
     /// Next board clockwise from `(from + 1) % count`.
@@ -230,7 +254,8 @@ enum GameEngine: Sendable {
             gameMode: session.gameMode,
             aiDifficulty: session.aiDifficulty,
             stats: stats,
-            sessionState: nextState
+            sessionState: nextState,
+            humanControlledMark: session.humanControlledMark
         )
     }
 }

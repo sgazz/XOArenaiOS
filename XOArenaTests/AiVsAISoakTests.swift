@@ -20,10 +20,15 @@ final class AiVsAISoakTests: XCTestCase {
 
         XCTAssertEqual(vm.sessionState, .playing)
         XCTAssertEqual(vm.remainingSeconds, 60)
+        XCTAssertFalse(vm.isTimerRunning)
+
+        vm.makeMove(boardIndex: 0, cellIndex: 0)
+        XCTAssertEqual(vm.currentMark, .o)
+        XCTAssertTrue(vm.isTimerRunning)
 
         for expected in stride(from: 59, through: 1, by: -1) {
             timer.simulateOneSecondPassed()
-            await Task.yield()
+            try await Task.sleep(nanoseconds: 10_000_000)
             XCTAssertEqual(vm.remainingSeconds, expected)
         }
 
@@ -38,7 +43,7 @@ final class AiVsAISoakTests: XCTestCase {
         await Task.yield()
 
         XCTAssertEqual(vm.sessionState, .completed)
-        XCTAssertEqual(vm.completionReason, .xTimedOut)
+        XCTAssertEqual(vm.completionReason, .oTimedOut)
         XCTAssertEqual(vm.remainingSeconds, 0)
 
         XCTAssertEqual(

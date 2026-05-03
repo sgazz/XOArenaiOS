@@ -15,7 +15,22 @@ final class HumanInputGateTests: XCTestCase {
             currentMark: .x,
             boardPlayState: .inProgress,
             cellMark: .empty,
-            isFocusedBoard: true
+            isFocusedBoard: true,
+            humanControlledMark: .x
+        )
+        XCTAssertTrue(allows)
+    }
+
+    func test_vsAI_human_allowed_on_O_turn_when_human_is_O() throws {
+        let allows = HumanInputGate.permitsCellPlacement(
+            gameMode: .vsAI,
+            sessionState: .playing,
+            isAIThinking: false,
+            currentMark: .o,
+            boardPlayState: .inProgress,
+            cellMark: .empty,
+            isFocusedBoard: true,
+            humanControlledMark: .o
         )
         XCTAssertTrue(allows)
     }
@@ -28,7 +43,8 @@ final class HumanInputGateTests: XCTestCase {
             currentMark: .o,
             boardPlayState: .inProgress,
             cellMark: .empty,
-            isFocusedBoard: true
+            isFocusedBoard: true,
+            humanControlledMark: .x
         )
         XCTAssertFalse(allows)
     }
@@ -41,7 +57,8 @@ final class HumanInputGateTests: XCTestCase {
             currentMark: .x,
             boardPlayState: .inProgress,
             cellMark: .empty,
-            isFocusedBoard: true
+            isFocusedBoard: true,
+            humanControlledMark: .x
         )
         XCTAssertFalse(allows)
     }
@@ -54,7 +71,8 @@ final class HumanInputGateTests: XCTestCase {
             currentMark: .o,
             boardPlayState: .inProgress,
             cellMark: .empty,
-            isFocusedBoard: true
+            isFocusedBoard: true,
+            humanControlledMark: nil
         )
         XCTAssertTrue(allows)
     }
@@ -67,7 +85,8 @@ final class HumanInputGateTests: XCTestCase {
             currentMark: .x,
             boardPlayState: .inProgress,
             cellMark: .empty,
-            isFocusedBoard: true
+            isFocusedBoard: true,
+            humanControlledMark: nil
         )
         XCTAssertFalse(allows)
     }

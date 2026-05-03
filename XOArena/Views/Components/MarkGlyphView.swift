@@ -45,6 +45,9 @@ struct MarkGlyphView: View {
         xVariant == 4 ? 0.91 : 1
     }
 
+    /// Vizuelno „bold“ na tabli: zajednička debljina poteza za **X** i **O** (tri sloja, isti Path).
+    private var boldStrokeBoost: CGFloat { 1.28 }
+
     var body: some View {
         Group {
             switch mark {
@@ -58,20 +61,18 @@ struct MarkGlyphView: View {
                     .drawingGroup(opaque: false)
             case .o:
                 oInkStack
-                    .padding(5 + paddingNudge(forX: false))
+                    .padding(4 + paddingNudge(forX: false))
                     .rotationEffect(.degrees(-1.95 + inkRotation))
                     .offset(inkNudge)
-                    .scaleEffect(x: 1.03, y: 0.945)
                     .drawingGroup(opaque: false)
             }
         }
     }
 
-    /// Blagi unutarnji razmak od mreže; varira po oznaci.
+    /// Blagi unutarnji razmak od mreže.
     private func paddingNudge(forX: Bool) -> CGFloat {
         let s = InkVariance.glyphVariantSeed(boardIndex: boardIndex, cellIndex: cellIndex, placementMoveOrdinal: placementMoveOrdinal)
-        let bump = CGFloat((s >> (forX ? 2 : 6)) % 5) / 28
-        return forX ? bump : bump + 0.15
+        return CGFloat((s >> (forX ? 2 : 6)) % 5) / 28
     }
 
     @ViewBuilder
@@ -98,25 +99,26 @@ struct MarkGlyphView: View {
         let (oo, om, oi) = opacityDrift
         switch themeMode {
         case .dark:
-            oStyledStroke(
-                outer: SGColors.textSecondary.opacity(0.42 * Double(oo)),
-                mid: SGColors.textDark.opacity(0.74 * Double(om)),
-                inner: SGColors.textDark.opacity(0.95 * Double(oi))
+            oTriStroke(
+                outer: SGColors.textSecondary.opacity(0.32 * Double(oo)),
+                mid: SGColors.textDark.opacity(0.48 * Double(om)),
+                inner: SGColors.textDark.opacity(0.94 * Double(oi))
             )
         case .light:
-            oStyledStroke(
-                outer: SGColors.inkSecondaryLight.opacity(0.46 * Double(oo)),
-                mid: SGColors.inkPrimaryLight.opacity(0.62 * Double(om)),
-                inner: SGColors.inkPrimaryLight.opacity(0.92 * Double(oi))
+            oTriStroke(
+                outer: SGColors.inkPrimaryLight.opacity(0.32 * Double(oo)),
+                mid: SGColors.inkSecondaryLight.opacity(0.54 * Double(om)),
+                inner: SGColors.inkPrimaryLight.opacity(0.94 * Double(oi))
             )
         }
     }
 
     private func xTriStroke(outer: Color, mid: Color, inner: Color) -> some View {
+        let b = boldStrokeBoost
         let lw: (CGFloat, CGFloat, CGFloat) = (
-            max(3.05 * strokeScale * xPencilThinMul, 2.74),
-            max(2.08 * strokeScale * xPencilThinMul, 1.76),
-            max(1.42 * strokeScale * xPencilThinMul, 1.22)
+            max(3.05 * strokeScale * xPencilThinMul * b, 2.74 * b),
+            max(2.08 * strokeScale * xPencilThinMul * b, 1.76 * b),
+            max(1.42 * strokeScale * xPencilThinMul * b, 1.22 * b)
         )
         return ZStack {
             HandDrawnXShape(variant: xVariant)
@@ -128,32 +130,20 @@ struct MarkGlyphView: View {
         }
     }
 
-    private func oStyledStroke(outer: Color, mid: Color, inner: Color) -> some View {
+    private func oTriStroke(outer: Color, mid: Color, inner: Color) -> some View {
+        let b = boldStrokeBoost
         let lw: (CGFloat, CGFloat, CGFloat) = (
-            max(2.96 * strokeScale, 2.68),
-            max(1.92 * strokeScale, 1.68),
-            max(1.08 * strokeScale, 0.92)
+            max(3.05 * strokeScale * b, 2.74 * b),
+            max(2.08 * strokeScale * b, 1.76 * b),
+            max(1.42 * strokeScale * b, 1.22 * b)
         )
-        return Group {
-            if oVariant == 4 {
-                ZStack {
-                    HandDrawnOShape(variant: 4, contour: .outer)
-                        .stroke(outer, style: StrokeStyle(lineWidth: lw.0, lineCap: .round, lineJoin: .round))
-                    HandDrawnOShape(variant: 4, contour: .inner)
-                        .stroke(mid, style: StrokeStyle(lineWidth: lw.1, lineCap: .round, lineJoin: .round))
-                    HandDrawnOShape(variant: 4, contour: .inner)
-                        .stroke(inner, style: StrokeStyle(lineWidth: lw.2, lineCap: .round, lineJoin: .round))
-                }
-            } else {
-                ZStack {
-                    HandDrawnOShape(variant: oVariant, contour: .single)
-                        .stroke(outer, style: StrokeStyle(lineWidth: lw.0, lineCap: .round, lineJoin: .round))
-                    HandDrawnOShape(variant: oVariant, contour: .single)
-                        .stroke(mid, style: StrokeStyle(lineWidth: lw.1, lineCap: .round, lineJoin: .round))
-                    HandDrawnOShape(variant: oVariant, contour: .single)
-                        .stroke(inner, style: StrokeStyle(lineWidth: lw.2, lineCap: .round, lineJoin: .round))
-                }
-            }
+        return ZStack {
+            HandDrawnOShape(variant: oVariant)
+                .stroke(outer, style: StrokeStyle(lineWidth: lw.0, lineCap: .round, lineJoin: .round))
+            HandDrawnOShape(variant: oVariant)
+                .stroke(mid, style: StrokeStyle(lineWidth: lw.1, lineCap: .round, lineJoin: .round))
+            HandDrawnOShape(variant: oVariant)
+                .stroke(inner, style: StrokeStyle(lineWidth: lw.2, lineCap: .round, lineJoin: .round))
         }
     }
 }
@@ -258,37 +248,12 @@ private func clamp(_ v: Int, _ lo: Int, _ hi: Int) -> Int {
 
 // MARK: - O oblika
 
-private enum OContour {
-    case single
-    case outer
-    case inner
-}
-
 private struct HandDrawnOShape: Shape {
     var variant: Int
-    var contour: OContour
 
     func path(in rect: CGRect) -> Path {
-        let v = clamp(variant, 0, 4)
-
-        if v == 4 {
-            switch contour {
-            case .outer:
-                return imperfectOval(rect, rxMul: 0.36, ryMul: 0.38)
-            case .inner:
-                let insetX = rect.width * 0.069
-                let insetY = rect.height * 0.076
-                let ir = rect.insetBy(dx: insetX, dy: insetY)
-                return imperfectOval(ir, rxMul: 0.36, ryMul: 0.38)
-            case .single:
-                return imperfectOval(rect, rxMul: 0.36, ryMul: 0.38)
-            }
-        }
-
-        guard case .single = contour else { return Path() }
-
-        switch v {
-        case 0:
+        switch clamp(variant, 0, 4) {
+        case 0, 4:
             return imperfectOval(rect, rxMul: 0.36, ryMul: 0.38)
         case 1:
             return slightlyOpenArc(rect)
@@ -373,25 +338,14 @@ private struct MarkGlyphVariantPreviewGallery: View {
                     }
                 }
 
-                Text("O — pet obližljaka (uključujući dvojni prsten)").font(.subheadline)
+                Text("O — pet obližljaka").font(.subheadline)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 72))], spacing: 12) {
                     ForEach(0 ..< 5, id: \.self) { vo in
                         VStack(spacing: 4) {
                             Text("O \(vo)").font(.caption2)
-                            Group {
-                                if vo == 4 {
-                                    ZStack {
-                                        HandDrawnOShape(variant: 4, contour: .outer)
-                                            .stroke(Color.blue.opacity(0.45), style: StrokeStyle(lineWidth: 2.8, lineCap: .round, lineJoin: .round))
-                                        HandDrawnOShape(variant: 4, contour: .inner)
-                                            .stroke(Color.primary.opacity(0.88), style: StrokeStyle(lineWidth: 1.42, lineCap: .round, lineJoin: .round))
-                                    }
-                                } else {
-                                    HandDrawnOShape(variant: vo, contour: .single)
-                                        .stroke(Color.primary.opacity(0.82), style: StrokeStyle(lineWidth: 2.05, lineCap: .round, lineJoin: .round))
-                                }
-                            }
-                            .frame(width: 56, height: 56)
+                            HandDrawnOShape(variant: vo)
+                                .stroke(Color.primary.opacity(0.82), style: StrokeStyle(lineWidth: 2.15, lineCap: .round, lineJoin: .round))
+                                .frame(width: 56, height: 56)
                         }
                             .padding(6)
                             .background(Color.gray.opacity(0.08))

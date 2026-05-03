@@ -14,7 +14,8 @@ enum HumanInputGate: Sendable {
         currentMark: Mark,
         boardPlayState: BoardPlayState,
         cellMark: Mark,
-        isFocusedBoard: Bool
+        isFocusedBoard: Bool,
+        humanControlledMark: Mark?
     ) -> Bool {
         guard sessionState == .playing else { return false }
         guard isFocusedBoard else { return false }
@@ -23,7 +24,9 @@ enum HumanInputGate: Sendable {
         guard !isAIThinking else { return false }
         switch gameMode {
         case .vsAI, .learning:
-            return currentMark == .x
+            let human = humanControlledMark ?? .x
+            guard human == .x || human == .o else { return false }
+            return currentMark == human
         case .aiVsAI:
             return false
         case .soloFocus, .localDuel:

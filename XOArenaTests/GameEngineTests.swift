@@ -137,7 +137,8 @@ final class GameEngineTests: XCTestCase {
             gameMode: .soloFocus,
             aiDifficulty: .hard,
             stats: .zero,
-            sessionState: .completed
+            sessionState: .completed,
+            humanControlledMark: nil
         )
         XCTAssertThrowsError(try GameEngine.applyMove(s, boardIndex: 0, cellIndex: 0)) { err in
             XCTAssertEqual(err as? MoveError, .sessionNotActive)

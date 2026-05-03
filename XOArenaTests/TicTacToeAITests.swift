@@ -205,7 +205,14 @@ final class TicTacToeAITests: XCTestCase {
             .empty, .empty, .empty
         ])
         XCTAssertEqual(
-            TicTacToeAI.chooseMove(on: board, aiMark: .o, humanMark: .x, difficulty: .hard),
+            TicTacToeAI.chooseMove(
+                on: board,
+                aiMark: .o,
+                humanMark: .x,
+                difficulty: .hard,
+                timerContext: AIMoveTimerContext(remainingSeconds: 500, totalSeconds: 500),
+                randomUnit: { 0 }
+            ),
             4
         )
     }
@@ -244,4 +251,121 @@ final class TicTacToeAITests: XCTestCase {
         XCTAssertNil(TicTacToeAI.chooseMove(on: board, aiMark: .o, humanMark: .x, difficulty: .easy))
         XCTAssertNil(TicTacToeAI.rankedMoves(on: board, aiMark: .o, humanMark: .x).first?.index)
     }
+
+    func test_ranked_moves_deterministic_across_calls() throws {
+        let board = TestBoardFixture.board(with: [
+            .x, .empty, .o,
+            .empty, .x, .empty,
+            .o, .empty, .empty
+        ])
+        let a = TicTacToeAI.rankedMoves(on: board, aiMark: .o, humanMark: .x)
+        let b = TicTacToeAI.rankedMoves(on: board, aiMark: .o, humanMark: .x)
+        XCTAssertFalse(a.isEmpty && b.isEmpty)
+        XCTAssertEqual(a.map(\.index), b.map(\.index))
+        XCTAssertEqual(a.map(\.score), b.map(\.score))
+    }
+
+    func test_hard_comfortable_second_tier_not_fixed_to_single_index_when_many_suboptimal() throws {
+        let board = TestBoardFixture.board(with: [
+            .x, .empty, .empty,
+            .empty, .empty, .empty,
+            .empty, .empty, .empty
+        ])
+        let ranked = TicTacToeAI.rankedMoves(on: board, aiMark: .o, humanMark: .x)
+        let topScore = ranked[0].score
+        let suboptimalIndices = ranked.filter { $0.score < topScore }.map(\.index)
+        XCTAssertGreaterThanOrEqual(
+            suboptimalIndices.count,
+            2,
+            "fixture needs ≥2 strictly suboptimal moves for this behavioral check"
+        )
+
+        let ctxComfort = AIMoveTimerContext(remainingSeconds: 100, totalSeconds: 100)
+        var picks = Set<Int>()
+        for trial in 0 ..< max(72, suboptimalIndices.count * 12) {
+            var call = 0
+            guard let idx = TicTacToeAI.chooseMove(
+                on: board,
+                aiMark: .o,
+                humanMark: .x,
+                difficulty: .hard,
+                timerContext: ctxComfort,
+                randomUnit: {
+                    defer { call += 1 }
+                    return call == 0
+                        ? 0.95
+                        : Double((trial * 65_537 + call) % 1000) / 1000.0
+                }
+            ) else {
+                XCTFail("expected move"); return
+            }
+            XCTAssertTrue(suboptimalIndices.contains(idx))
+            XCTAssertNotEqual(idx, 4)
+            picks.insert(idx)
+        }
+        XCTAssertGreaterThanOrEqual(picks.count, 2)
+    }
+
+    func test_hard_low_pressure_second_tier_samples_multiple_when_available() throws {
+        let board = TestBoardFixture.board(with: [
+            .x, .empty, .empty,
+            .empty, .empty, .empty,
+            .empty, .empty, .empty
+        ])
+        let ranked = TicTacToeAI.rankedMoves(on: board, aiMark: .o, humanMark: .x)
+        let topScore = ranked[0].score
+        let suboptimalSorted = ranked.filter { $0.score < topScore }.map(\.index).sorted()
+
+        XCTAssertGreaterThanOrEqual(suboptimalSorted.count, 2)
+
+        let ctxLow = AIMoveTimerContext(remainingSeconds: 20, totalSeconds: 100)
+        var picks = Set<Int>()
+        for trial in 0 ..< 60 {
+            var call = 0
+            guard let idx = TicTacToeAI.chooseMove(
+                on: board,
+                aiMark: .o,
+                humanMark: .x,
+                difficulty: .hard,
+                timerContext: ctxLow,
+                randomUnit: {
+                    defer { call += 1 }
+                    return call == 0
+                        ? 0.85
+                        : Double((trial * 973 + call * 41) % 997) / 997.0
+                }
+            ) else {
+                XCTFail("expected move"); return
+            }
+            XCTAssertTrue(suboptimalSorted.contains(idx))
+            picks.insert(idx)
+        }
+        XCTAssertGreaterThanOrEqual(picks.count, 2)
+    }
+
+    func test_hard_critical_pressure_never_returns_invalid_cell() throws {
+        let board = TestBoardFixture.board(with: [
+            .x, .empty, .empty,
+            .empty, .empty, .empty,
+            .empty, .empty, .empty
+        ])
+        let ctxCritical = AIMoveTimerContext(remainingSeconds: 0, totalSeconds: 120)
+        let legal = Set((0 ..< GameConstants.cellCount).filter { board.cells[$0].mark == .empty })
+
+        for i in 0 ..< 120 {
+            let u = Double(i) / Double(119)
+            guard let idx = TicTacToeAI.chooseMove(
+                on: board,
+                aiMark: .o,
+                humanMark: .x,
+                difficulty: .hard,
+                timerContext: ctxCritical,
+                randomUnit: { u }
+            ) else {
+                XCTFail("expected move"); return
+            }
+            XCTAssertTrue(legal.contains(idx))
+        }
+    }
+
 }

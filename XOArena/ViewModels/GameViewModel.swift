@@ -17,11 +17,13 @@ final class GameViewModel {
     /// Kada je postavljeno (samo **`@testable`** testovi), preskače slučajnu vsAI pause.
     internal var aiThinkDelayNanosecondsOverrideForTests: UInt64?
 
-    /// True when the slab is paced by **`TicTacToeAI`** (**`vsAI`**: **`O`** only; **`aiVsAI`**: both marks).
+    /// True when the slab is paced by **`TicTacToeAI`** (**`vsAI`** / **`learning`**: mark suprotan od **`humanControlledMark`**).
     var isAITurn: Bool {
         guard session.sessionState == .playing else { return false }
         switch session.gameMode {
-        case .vsAI, .learning: return currentMark == .o
+        case .vsAI, .learning:
+            let human = session.humanControlledMark ?? .x
+            return currentMark == human.nextInTurn
         case .aiVsAI: return true
         default: return false
         }
@@ -32,6 +34,10 @@ final class GameViewModel {
 
     /// Last selected AI strength for **`vsAI`** / **`aiVsAI`** (persisted across **`startNewGame`** / **`resetGame`**).
     private var preferredAIDifficulty: AIDifficulty = .easy
+
+    /// Ponovno korišćenje u **`resetGame`** za **vsAI** / **learning**.
+    private var persistedPvAIHumanMark: Mark = .x
+    private var persistedPvAIFirstMover: FirstMoverChoice = .player
 
     /// Current session AI difficulty (single-board **`TicTacToeAI`**). Writable for DEBUG toolbar.
     var aiDifficulty: AIDifficulty {
@@ -51,18 +57,19 @@ final class GameViewModel {
     /// Subtle subtitle under header when O is pondering ( **`vsAI`** only ).
     private(set) var aiWhisperLine: String?
 
-    /// Human cannot place marks while AI “thinks” or when **`vsAI`** awaits **`O`**; **`aiVsAI`** is fully automated.
+    /// Human cannot place marks while AI “thinks” ili kada nije red na **`humanControlledMark`**; **`aiVsAI`** je potpuno automatski.
     var isInputLocked: Bool {
         guard session.sessionState == .playing else { return true }
         if isAIThinking { return true }
         if session.gameMode == .aiVsAI { return true }
-        if session.gameMode == .vsAI || session.gameMode == .learning, currentMark != .x {
-            return true
+        if session.gameMode == .vsAI || session.gameMode == .learning {
+            let human = session.humanControlledMark ?? .x
+            if currentMark != human { return true }
         }
         return false
     }
 
-    /// Populated while **`GameMode.learning`** is active (human **X**, adaptive **O**).
+    /// Populated while **`GameMode.learning`** is active (čovek vs adaptivni AI).
     private(set) var learningProfile: LearningProfile = .initial
 
     private(set) var selectedDuration: GameDuration = .oneMinute
@@ -76,6 +83,9 @@ final class GameViewModel {
     private var activeClockDeadline: Date?
     private(set) var isTimerRunning: Bool = false
     private(set) var completionReason: CompletionReason?
+
+    /// Dok nema ni jednog markera na ijednoj tabli, ne palimo **`GameTimerService`** (**`scheduleAIIfNeeded`** i dalje radi).
+    @ObservationIgnored private var playClockSuspendedUntilFirstMark: Bool = false
 
     /// Kratak vizuelni signal nakon **vsAI / learning** pobjede igrača na tabli (vidi **`TimeRewardEvent`**).
     private(set) var latestTimeReward: TimeRewardEvent?
@@ -111,12 +121,12 @@ final class GameViewModel {
     }
 
     private static let boardDrawTimeBonusSeconds: Int = 5
-    /// vsAI / learning: kada **X** osvoji tablu, **+X / −O** pre klampa.
-    private static let vsAILearningXBoardWinRewardShiftSeconds: Int = 5
-    /// Gornja granica banka **X** nakon nagrade: **`selectedDuration` + ovo**.
-    private static let vsAILearningXTimeCapOverInitialSeconds: Int = 15
-    /// Donja granica banka **O** nakon nagrade.
-    private static let vsAILearningOTimeFloorAfterRewardSeconds: Int = 3
+    /// vsAI / learning: pomeraj vremena kad **čovek** pobedi tablu.
+    private static let vsAILearningHumanBoardWinRewardShiftSeconds: Int = 5
+    /// Gornja granica **čovekove** banke nakon nagrade: **`selectedDuration` + ovo**.
+    private static let vsAILearningHumanTimeCapOverInitialSeconds: Int = 15
+    /// Donja granica **AI** banke nakon nagrade.
+    private static let vsAILearningAiTimeFloorAfterRewardSeconds: Int = 3
     /// Koliko dugo drži **`latestTimeReward`** prije auto-brisanja (**~1.2s**, usklađeno sa HUD fade pulsom).
     private static let timeRewardFeedbackVisibilityNanoseconds: UInt64 = 1_220_000_000
 
@@ -126,6 +136,14 @@ final class GameViewModel {
         case .o: return oRemainingSeconds
         case .empty: return 0
         }
+    }
+
+    private static func sessionHasAnyMarkedCell(_ session: GameSession) -> Bool {
+        session.boards.contains { slab in slab.cells.contains { $0.mark != .empty } }
+    }
+
+    private static func playClockSuspendedForSession(_ session: GameSession) -> Bool {
+        session.sessionState == .playing && !sessionHasAnyMarkedCell(session)
     }
 
     /// Zaustavlja sat, opciono dodeljuje bonus nerešenom mini‑krugu, ponovo pokreće sat za **`currentMark`**.
@@ -150,24 +168,44 @@ final class GameViewModel {
             )
 #endif
         } else if after.gameMode == .vsAI || after.gameMode == .learning,
-                  after.stats.xBoardWins > before.stats.xBoardWins {
-            xRemainingSeconds += Self.vsAILearningXBoardWinRewardShiftSeconds
-            oRemainingSeconds -= Self.vsAILearningXBoardWinRewardShiftSeconds
-            let xCap = selectedDuration.seconds + Self.vsAILearningXTimeCapOverInitialSeconds
-            let oFloor = Self.vsAILearningOTimeFloorAfterRewardSeconds
-            xRemainingSeconds = min(xRemainingSeconds, xCap)
-            oRemainingSeconds = max(oRemainingSeconds, oFloor)
+                  let humanMark = after.humanControlledMark {
+            let humanWonBoard =
+                (humanMark == .x && after.stats.xBoardWins > before.stats.xBoardWins)
+                || (humanMark == .o && after.stats.oBoardWins > before.stats.oBoardWins)
+            if humanWonBoard {
+                applyHumanVsAIWinReward(humanMark: humanMark)
 #if DEBUG
-            GameDebugLogger.rewardApplied(
-                winner: .x,
-                xAfter: xRemainingSeconds,
-                oAfter: oRemainingSeconds
-            )
-            GameDebugLogger.logReward(xTime: xRemainingSeconds, oTime: oRemainingSeconds)
+                GameDebugLogger.rewardApplied(
+                    winner: humanMark,
+                    xAfter: xRemainingSeconds,
+                    oAfter: oRemainingSeconds
+                )
+                GameDebugLogger.logReward(xTime: xRemainingSeconds, oTime: oRemainingSeconds)
 #endif
-            presentBoardWinTimeRewardFeedback(.playerVsAIBoardWin)
+                presentBoardWinTimeRewardFeedback(.humanBoardWinAgainstAI(humanMark: humanMark))
+            }
         }
         startTimerIfNeeded()
+    }
+
+    private func applyHumanVsAIWinReward(humanMark: Mark) {
+        let shift = Self.vsAILearningHumanBoardWinRewardShiftSeconds
+        let cap = selectedDuration.seconds + Self.vsAILearningHumanTimeCapOverInitialSeconds
+        let floorSecs = Self.vsAILearningAiTimeFloorAfterRewardSeconds
+        switch humanMark {
+        case .x:
+            xRemainingSeconds += shift
+            oRemainingSeconds -= shift
+            xRemainingSeconds = min(xRemainingSeconds, cap)
+            oRemainingSeconds = max(oRemainingSeconds, floorSecs)
+        case .o:
+            oRemainingSeconds += shift
+            xRemainingSeconds -= shift
+            oRemainingSeconds = min(oRemainingSeconds, cap)
+            xRemainingSeconds = max(xRemainingSeconds, floorSecs)
+        case .empty:
+            break
+        }
     }
 
     private func presentBoardWinTimeRewardFeedback(_ event: TimeRewardEvent) {
@@ -208,7 +246,9 @@ final class GameViewModel {
         _ = services
         self.timerService = timerService
         self.now = now
-        self.session = session ?? GameEngine.makeIdleSession()
+        let initial = session ?? GameEngine.makeIdleSession()
+        self.session = initial
+        self.playClockSuspendedUntilFirstMark = Self.playClockSuspendedForSession(initial)
         _ = SoundService.shared
     }
 
@@ -270,7 +310,8 @@ final class GameViewModel {
             currentMark: currentMark,
             boardPlayState: slab,
             cellMark: cellMark,
-            isFocusedBoard: focused
+            isFocusedBoard: focused,
+            humanControlledMark: session.humanControlledMark
         )
     }
 
@@ -284,7 +325,12 @@ final class GameViewModel {
     /// Backwards‑compatible combined line for callers that want a single string.
     var turnLabel: String { turnLabelPrimary }
 
-    func startNewGame(mode: GameMode, duration: GameDuration = .oneMinute) {
+    func startNewGame(
+        mode: GameMode,
+        duration: GameDuration = .oneMinute,
+        pvaiHumanMark: Mark? = nil,
+        pvaiFirstMover: FirstMoverChoice? = nil
+    ) {
         selectedDuration = duration
         let full = duration.seconds
         xRemainingSeconds = full
@@ -293,10 +339,23 @@ final class GameViewModel {
         cancelTimeRewardFeedback()
         cancelAIPipeline(debugLogCancel: true)
         stopTimer()
-        session = GameEngine.makeInitialSession(mode: mode)
+        if mode == .vsAI || mode == .learning {
+            let h = pvaiHumanMark ?? .x
+            let fm = pvaiFirstMover ?? .player
+            persistedPvAIHumanMark = h
+            persistedPvAIFirstMover = fm
+            session = GameEngine.makeInitialSession(
+                mode: mode,
+                humanControlledMark: h,
+                firstMover: fm
+            )
+        } else {
+            session = GameEngine.makeInitialSession(mode: mode)
+        }
+        playClockSuspendedUntilFirstMark = Self.playClockSuspendedForSession(session)
         learningProfile = .initial
         switch mode {
-        case .vsAI, .aiVsAI:
+        case .vsAI, .learning, .aiVsAI:
             session.aiDifficulty = preferredAIDifficulty
         default:
             break
@@ -329,7 +388,8 @@ final class GameViewModel {
             currentMark: currentMark,
             boardPlayState: boards[safe: boardIndex]?.playState ?? .drawn,
             cellMark: boards[safe: boardIndex]?.cells[safe: cellIndex]?.mark ?? .empty,
-            isFocusedBoard: focusedBoardIndex.map { $0 == boardIndex } ?? false
+            isFocusedBoard: focusedBoardIndex.map { $0 == boardIndex } ?? false,
+            humanControlledMark: session.humanControlledMark
         ) else {
             HapticService.warning()
 #if DEBUG
@@ -362,13 +422,20 @@ final class GameViewModel {
                 var p = learningProfile
                 let preBoard = beforeSession.boards[boardIndex]
                 let postBoard = next.boards[boardIndex]
+                let humanM = beforeSession.humanControlledMark ?? .x
                 LearningAnalyzer.processHumanMove(
                     preBoard: preBoard,
                     postBoard: postBoard,
                     cellIndex: cellIndex,
+                    aiMark: humanM.nextInTurn,
                     profile: &p
                 )
-                LearningAnalyzer.applyBoardOutcomeDelta(before: beforeSession.stats, after: next.stats, profile: &p)
+                LearningAnalyzer.applyBoardOutcomeDelta(
+                    before: beforeSession.stats,
+                    after: next.stats,
+                    humanControlledMark: humanM,
+                    profile: &p
+                )
                 learningBlockIncremented = p.successfulBlocks > learningBlocksBefore
                 learningProfile = p
             }
@@ -424,9 +491,18 @@ final class GameViewModel {
 #endif
         stopTimer()
         let mode = session.gameMode
-        session = GameEngine.makeInitialSession(mode: mode)
+        if mode == .vsAI || mode == .learning {
+            session = GameEngine.makeInitialSession(
+                mode: mode,
+                humanControlledMark: persistedPvAIHumanMark,
+                firstMover: persistedPvAIFirstMover
+            )
+        } else {
+            session = GameEngine.makeInitialSession(mode: mode)
+        }
+        playClockSuspendedUntilFirstMark = Self.playClockSuspendedForSession(session)
         switch mode {
-        case .vsAI, .aiVsAI:
+        case .vsAI, .learning, .aiVsAI:
             session.aiDifficulty = preferredAIDifficulty
         default:
             break
@@ -453,7 +529,10 @@ final class GameViewModel {
         guard session.sessionState == .playing else { return }
         guard !isAIThinking else { return }
         if session.gameMode == .aiVsAI { return }
-        if session.gameMode == .vsAI || session.gameMode == .learning, currentMark != .x { return }
+        if session.gameMode == .vsAI || session.gameMode == .learning {
+            let human = session.humanControlledMark ?? .x
+            if currentMark != human { return }
+        }
         guard let next = GameEngine.advanceFocus(session) else { return }
         session = next
         snapOutgoingClockFromDeadlineBeforeStopping()
@@ -502,6 +581,14 @@ final class GameViewModel {
         guard session.sessionState == .playing else { return }
         let mark = currentMark
         guard mark == .x || mark == .o else { return }
+
+        if playClockSuspendedUntilFirstMark {
+            guard Self.sessionHasAnyMarkedCell(session) else {
+                scheduleAIIfNeeded()
+                return
+            }
+            playClockSuspendedUntilFirstMark = false
+        }
 
 #if DEBUG
         var switchedFromTimerMark: Mark? = nil
@@ -597,13 +684,24 @@ final class GameViewModel {
         _ = updateClockBankFromDeadline(for: m)
     }
 
+    /// Deadline → preostale **cele** sekunde za HUD i banku.
+    ///
+    /// **`Int(floor(dt))`** kod tikova koji stignu malo kasno mogao je da spusti prikaz za **2+** u jednom intervalu (~**`dt ≈ k − 0.02`** → **floor** daje **k−1**, a trebalo je **k** za „jedna protekla sekunda“).
+    /// Za **`dt > 0`** koristimo **`ceil(max(0, dt − ε))`** (mali **ε** sprečava grešku na floating-point granici). Za **`dt ≤ 0`** vraćamo **0** tako da istek i **`completeForTimeExpiryIfNeeded`** ostanu tačni.
+    private static func wholeSecondsRemainingUntilDeadline(_ deadline: Date, relativeTo nowDate: Date) -> Int {
+        let dt = deadline.timeIntervalSince(nowDate)
+        guard dt > 0 else { return 0 }
+        let adjusted = Swift.max(0, dt - 1e-9)
+        return Swift.max(0, Int(ceil(adjusted)))
+    }
+
     /// Samo čitanje preostalog vremena sa **`activeClockDeadline`** (bez menjanja **`@Observable`** stanja — za log ili brzu proveru).
     private func peekWallRemainingSeconds(for armMark: Mark) -> Int {
         guard armMark == .x || armMark == .o else { return 0 }
         guard armMark == timerActiveForMark, let deadline = activeClockDeadline else {
             return secondsForMark(armMark)
         }
-        return max(0, Int(floor(deadline.timeIntervalSince(now()))))
+        return Self.wholeSecondsRemainingUntilDeadline(deadline, relativeTo: now())
     }
 
     /// Vraća preostale sekunde za **`armMark`** nakon usklađivanja sa **`activeClockDeadline`**.
@@ -616,7 +714,7 @@ final class GameViewModel {
         guard let deadline = activeClockDeadline else {
             return secondsForMark(armMark)
         }
-        let left = max(0, Int(floor(deadline.timeIntervalSince(now()))))
+        let left = Self.wholeSecondsRemainingUntilDeadline(deadline, relativeTo: now())
         switch armMark {
         case .x: xRemainingSeconds = left
         case .o: oRemainingSeconds = left
@@ -694,7 +792,7 @@ final class GameViewModel {
 #endif
     }
 
-    /// Central AI scheduler: **`aiVsAI`** plays both **`X`** and **`O`**; **`vsAI`** only **`O`**. Always async + re-validates before **`applyMove`**.
+    /// Central AI scheduler: **`aiVsAI`** oba markera; **`vsAI`** / **`learning`** samo kada je red na **AI** marku (`humanControlledMark.nextInTurn`).
     func scheduleAIIfNeeded() {
         let board = activeBoardIndex
         let mark = currentMark
@@ -716,7 +814,8 @@ final class GameViewModel {
 #endif
         }
 
-        let requiresCentralAI = mode == .aiVsAI || ((mode == .vsAI || mode == .learning) && mark == .o)
+        let aiMark = (session.humanControlledMark ?? .x).nextInTurn
+        let requiresCentralAI = mode == .aiVsAI || ((mode == .vsAI || mode == .learning) && mark == aiMark)
         guard requiresCentralAI else {
             audit(false, "not_central_ai_mode")
             return
@@ -789,7 +888,7 @@ final class GameViewModel {
             if runningMode == .aiVsAI {
                 self.aiWhisperLine = "Auto-play…"
             } else {
-                self.aiWhisperLine = "O is drawing…"
+                self.aiWhisperLine = "AI is thinking…"
             }
 
             let computedDelayNanos: UInt64
@@ -920,11 +1019,12 @@ final class GameViewModel {
                 return
             }
 
+            let aiScheduledMark = (self.session.humanControlledMark ?? .x).nextInTurn
             guard runningMode == .aiVsAI
-                || ((runningMode == .vsAI || runningMode == .learning) && self.currentMark == .o)
+                || ((runningMode == .vsAI || runningMode == .learning) && self.currentMark == aiScheduledMark)
             else {
 #if DEBUG
-                GameDebugLogger.aiMoveIgnored(reason: "vsAI_no_longer_o")
+                GameDebugLogger.aiMoveIgnored(reason: "vsAI_no_longer_ai_mark")
 #endif
                 return
             }
@@ -1015,7 +1115,12 @@ final class GameViewModel {
                 self.session = applied
                 if applied.gameMode == .learning {
                     var p = self.learningProfile
-                    LearningAnalyzer.applyBoardOutcomeDelta(before: beforeSnap.stats, after: applied.stats, profile: &p)
+                    LearningAnalyzer.applyBoardOutcomeDelta(
+                        before: beforeSnap.stats,
+                        after: applied.stats,
+                        humanControlledMark: self.session.humanControlledMark ?? .x,
+                        profile: &p
+                    )
                     self.learningProfile = p
                 }
                 self.notifyAppliedMoveFeedback(

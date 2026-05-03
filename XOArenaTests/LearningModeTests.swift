@@ -16,7 +16,7 @@ final class LearningModeTests: XCTestCase {
         let pre = emptyBoard()
         var post = pre
         post.cells[4].mark = .x
-        LearningAnalyzer.processHumanMove(preBoard: pre, postBoard: post, cellIndex: 4, profile: &profile)
+        LearningAnalyzer.processHumanMove(preBoard: pre, postBoard: post, cellIndex: 4, aiMark: .o, profile: &profile)
         XCTAssertEqual(profile.centerMoves, 1)
         XCTAssertEqual(profile.cornerMoves, 0)
         XCTAssertEqual(profile.sideMoves, 0)
@@ -27,7 +27,7 @@ final class LearningModeTests: XCTestCase {
         let pre = emptyBoard()
         var post = pre
         post.cells[0].mark = .x
-        LearningAnalyzer.processHumanMove(preBoard: pre, postBoard: post, cellIndex: 0, profile: &profile)
+        LearningAnalyzer.processHumanMove(preBoard: pre, postBoard: post, cellIndex: 0, aiMark: .o, profile: &profile)
         XCTAssertEqual(profile.cornerMoves, 1)
         XCTAssertEqual(profile.centerMoves, 0)
     }
@@ -37,7 +37,7 @@ final class LearningModeTests: XCTestCase {
         let pre = emptyBoard()
         var post = pre
         post.cells[1].mark = .x
-        LearningAnalyzer.processHumanMove(preBoard: pre, postBoard: post, cellIndex: 1, profile: &profile)
+        LearningAnalyzer.processHumanMove(preBoard: pre, postBoard: post, cellIndex: 1, aiMark: .o, profile: &profile)
         XCTAssertEqual(profile.sideMoves, 1)
     }
 
@@ -50,7 +50,7 @@ final class LearningModeTests: XCTestCase {
         ])
         var post = pre
         post.cells[8].mark = .x
-        LearningAnalyzer.processHumanMove(preBoard: pre, postBoard: post, cellIndex: 8, profile: &profile)
+        LearningAnalyzer.processHumanMove(preBoard: pre, postBoard: post, cellIndex: 8, aiMark: .o, profile: &profile)
         XCTAssertEqual(profile.missedBlocks, 1)
         XCTAssertEqual(profile.successfulBlocks, 0)
         XCTAssertEqual(profile.latestFeedbackMessage, "You missed a block.")
@@ -65,7 +65,7 @@ final class LearningModeTests: XCTestCase {
         ])
         var post = pre
         post.cells[2].mark = .x
-        LearningAnalyzer.processHumanMove(preBoard: pre, postBoard: post, cellIndex: 2, profile: &profile)
+        LearningAnalyzer.processHumanMove(preBoard: pre, postBoard: post, cellIndex: 2, aiMark: .o, profile: &profile)
         XCTAssertEqual(profile.successfulBlocks, 1)
         XCTAssertEqual(profile.missedBlocks, 0)
         XCTAssertEqual(profile.latestFeedbackMessage, "Good block.")
@@ -108,13 +108,13 @@ final class LearningModeTests: XCTestCase {
 
         var post1 = pre
         post1.cells[0].mark = .x
-        LearningAnalyzer.processHumanMove(preBoard: pre, postBoard: post1, cellIndex: 0, profile: &profile)
+        LearningAnalyzer.processHumanMove(preBoard: pre, postBoard: post1, cellIndex: 0, aiMark: .o, profile: &profile)
         XCTAssertTrue(profile.latestFeedbackMessage.isEmpty)
 
         let pre2 = post1
         var post2 = pre2
         post2.cells[1].mark = .x
-        LearningAnalyzer.processHumanMove(preBoard: pre2, postBoard: post2, cellIndex: 1, profile: &profile)
+        LearningAnalyzer.processHumanMove(preBoard: pre2, postBoard: post2, cellIndex: 1, aiMark: .o, profile: &profile)
         XCTAssertEqual(profile.latestFeedbackMessage, "Try the center early.")
     }
 
@@ -126,7 +126,8 @@ final class LearningModeTests: XCTestCase {
             currentMark: .x,
             boardPlayState: .inProgress,
             cellMark: .empty,
-            isFocusedBoard: true
+            isFocusedBoard: true,
+            humanControlledMark: .x
         )
         XCTAssertTrue(allows)
         let blocksO = HumanInputGate.permitsCellPlacement(
@@ -136,7 +137,8 @@ final class LearningModeTests: XCTestCase {
             currentMark: .o,
             boardPlayState: .inProgress,
             cellMark: .empty,
-            isFocusedBoard: true
+            isFocusedBoard: true,
+            humanControlledMark: .x
         )
         XCTAssertFalse(blocksO)
     }

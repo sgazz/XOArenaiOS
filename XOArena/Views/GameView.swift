@@ -139,11 +139,14 @@ struct GameView: View {
     fileprivate static let iphoneLandscapeGridBiasY: CGFloat = 10
 
     @Bindable var viewModel: GameViewModel
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.layoutDirection) private var layoutDirection
     @Environment(\.sgThemeMode) private var themeMode
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var hideTrailingDebugToolbarChrome = false
+    @State private var swipeBackDragStart: CGPoint?
 
     private var t: XOTheme.Tokens { XOTheme.tokens(for: themeMode) }
 
@@ -158,6 +161,7 @@ struct GameView: View {
     var body: some View {
         GeometryReader { proxy in
             let hideTrail = GameView.toolbarTrailingHiddenForOrientation(proxy)
+            let edgeSwipeDismiss = edgeSwipeDismissGesture(containerWidth: proxy.size.width)
 
             ZStack {
                 PaperBackgroundView()
@@ -213,6 +217,9 @@ struct GameView: View {
                             stats: viewModel.stats,
                             reason: viewModel.completionReason ?? .timeExpired,
                             gameMode: viewModel.gameMode,
+                            humanPlayerMark: (viewModel.gameMode == .vsAI || viewModel.gameMode == .learning)
+                                ? viewModel.session.humanControlledMark
+                                : nil,
                             learningProfile: viewModel.gameMode == .learning ? viewModel.learningProfile : nil,
                             onPlayAgain: {
                                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -247,11 +254,17 @@ struct GameView: View {
 #endif
             }
             .allowsHitTesting(true)
+            .simultaneousGesture(edgeSwipeDismiss)
+            .accessibilityAction(.escape) {
+                dismiss()
+            }
+            .accessibilityHint("Prevucite od ivice ekrana da napustite partiju.")
             .preference(key: MinimalGameTrailingToolbarPreferenceKey.self, value: hideTrail)
         }
         .onPreferenceChange(MinimalGameTrailingToolbarPreferenceKey.self) { hideTrailingDebugToolbarChrome = $0 }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         .onAppear {
             viewModel.onGameViewAppear()
         }
@@ -281,12 +294,49 @@ struct GameView: View {
         .sgToolbarStyle()
     }
 
-    /// iPhone landscape: bez trailing DEBUG kontrola (**back** ostaje sistemski uz safe area).
+    /// iPhone landscape: bez trailing DEBUG kontrola (nazad je **swipe sa ivice**).
     private static func toolbarTrailingHiddenForOrientation(_ proxy: GeometryProxy) -> Bool {
         let w = proxy.size.width
         let h = proxy.size.height
         let isLandscape = w > h
         return !userInterfaceIsPad && isLandscape
+    }
+
+    /// Izlaz kao na **interactive pop**: početak u uzem pojasu uz **leading** (LTR) / **trailing** (RTL) ivicu.
+    private func edgeSwipeDismissGesture(containerWidth: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 36, coordinateSpace: .local)
+            .onChanged { value in
+                if swipeBackDragStart == nil {
+                    swipeBackDragStart = value.location
+                }
+            }
+            .onEnded { value in
+                defer { swipeBackDragStart = nil }
+                guard containerWidth > 1, let start = swipeBackDragStart else { return }
+                let margin: CGFloat = 76
+                let startedNearBackGeometry: Bool
+                switch layoutDirection {
+                case .rightToLeft:
+                    startedNearBackGeometry = start.x > containerWidth - margin
+                case .leftToRight:
+                    fallthrough
+                @unknown default:
+                    startedNearBackGeometry = start.x < margin
+                }
+                guard startedNearBackGeometry else { return }
+                let dx = value.translation.width
+                let dy = abs(value.translation.height)
+                guard dy < 100 else { return }
+                switch layoutDirection {
+                case .rightToLeft:
+                    guard dx < -115 else { return }
+                case .leftToRight:
+                    fallthrough
+                @unknown default:
+                    guard dx > 115 else { return }
+                }
+                dismiss()
+            }
     }
 
     // MARK: - Minimal hero (samo vidljivi timer; hod samo u accessibility)
@@ -295,16 +345,18 @@ struct GameView: View {
         let base = metrics.heroTimerFontSize
         let activeFont = Font.system(size: base, design: .rounded).weight(.semibold)
         let inactiveFont = Font.system(size: base * 0.88, design: .rounded).weight(.medium)
+        let markLetterFont = Font.system(size: base, design: .rounded).weight(.bold)
         let dashFont = Font.system(size: base * 0.72, design: .rounded).weight(.medium)
 
         return HStack(alignment: .firstTextBaseline, spacing: SGSpacing.sm) {
             HStack(spacing: 4) {
                 Text("X")
+                    .font(markLetterFont)
                 Text(viewModel.formattedXRemainingTime)
+                    .font(viewModel.currentMark == .x ? activeFont : inactiveFont)
+                    .monospacedDigit()
             }
-            .font(viewModel.currentMark == .x ? activeFont : inactiveFont)
             .foregroundStyle(heroClockInk(for: .x))
-            .monospacedDigit()
             .sgEngravedText(
                 intensity: viewModel.currentMark == .x && viewModel.sessionState == .playing ? .high : .low,
                 color: heroClockInk(for: .x)
@@ -316,11 +368,12 @@ struct GameView: View {
 
             HStack(spacing: 4) {
                 Text(viewModel.formattedORemainingTime)
+                    .font(viewModel.currentMark == .o ? activeFont : inactiveFont)
+                    .monospacedDigit()
                 Text("O")
+                    .font(markLetterFont)
             }
-            .font(viewModel.currentMark == .o ? activeFont : inactiveFont)
             .foregroundStyle(heroClockInk(for: .o))
-            .monospacedDigit()
             .sgEngravedText(
                 intensity: viewModel.currentMark == .o && viewModel.sessionState == .playing ? .high : .low,
                 color: heroClockInk(for: .o)
@@ -426,12 +479,28 @@ struct GameView: View {
         HapticService.lightImpact()
     }
 
+    /// Vertikalni pomak linije nagrade ispod reda sata (overlay ne menja layout visine HUD-a).
+    private func timeRewardOverlayOffsetY(metrics: GameLayoutMetrics) -> CGFloat {
+        max(16, metrics.heroTimerFontSize * 0.4 + 4)
+    }
+
     // MARK: - HUD (tajmer + skor + learning)
 
     @ViewBuilder
     private func gameHUDCluster(metrics: GameLayoutMetrics, showLearningStrip: Bool) -> some View {
         VStack(spacing: metrics.hudClusterSpacing) {
             gameInformationHeader(metrics: metrics)
+                .overlay(alignment: .bottom) {
+                    if let reward = viewModel.latestTimeReward {
+                        GameClockTimeRewardLine(
+                            event: reward,
+                            announcement: viewModel.timeRewardAnnouncementID,
+                            tokens: t,
+                            themeMode: themeMode
+                        )
+                        .offset(y: timeRewardOverlayOffsetY(metrics: metrics))
+                    }
+                }
             sessionScoreStrip(metrics: metrics)
             if showLearningStrip {
                 LearningModeStripView(
@@ -755,6 +824,60 @@ struct GameView: View {
             isLandscape: isLandscape,
             isPadCompactWidth: isPadCompactWidth
         )
+    }
+}
+
+// MARK: - Time reward HUD (vsAI / learning, pobeda čoveka na tabli)
+
+/// Diskretna linija nagrade: **overlay** ispod reda sata (**fade + drift**), bez dodatne visine HUD-a.
+private struct GameClockTimeRewardLine: View {
+    let event: TimeRewardEvent
+    let announcement: UInt64
+    let tokens: XOTheme.Tokens
+    let themeMode: SGThemeMode
+
+    @State private var opacity: Double = 0
+    @State private var offsetY: CGFloat = 5
+
+    private let fadeInSeconds: CGFloat = 0.32
+    private let dwellNanoseconds: UInt64 = 560_000_000
+    private let fadeOutSeconds: CGFloat = 0.32
+
+    var body: some View {
+        Text(event.clockRowCaption)
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(tokens.textSecondary.opacity(themeMode == .light ? 0.74 : 0.62))
+            .tracking(0.12)
+            .monospacedDigit()
+            .lineLimit(1)
+            .minimumScaleFactor(0.78)
+            .multilineTextAlignment(.center)
+            .opacity(opacity)
+            .offset(y: offsetY)
+            .sgEngravedText(intensity: .low, color: tokens.textSecondary.opacity(themeMode == .light ? 0.74 : 0.62))
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .frame(maxWidth: .infinity)
+            .onAppear {
+                runPulse()
+            }
+            .id(announcement)
+    }
+
+    private func runPulse() {
+        opacity = 0
+        offsetY = 5
+        withAnimation(.easeOut(duration: fadeInSeconds)) {
+            opacity = 1
+            offsetY = -2
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: dwellNanoseconds)
+            withAnimation(.easeIn(duration: fadeOutSeconds)) {
+                opacity = 0
+                offsetY = -7
+            }
+        }
     }
 }
 

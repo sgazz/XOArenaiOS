@@ -12,6 +12,8 @@ struct GameSession: Equatable, Sendable {
     var aiDifficulty: AIDifficulty
     var stats: GameStats
     var sessionState: GameSessionState
+    /// U **vsAI** / **learning**: oznaka koju kontroliše čovek; **`nil`** u ostalim modovima.
+    var humanControlledMark: Mark?
 
     var currentMarkForActiveBoard: Mark {
         guard boards.indices.contains(activeBoardIndex) else { return .x }

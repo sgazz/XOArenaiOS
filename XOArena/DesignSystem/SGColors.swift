@@ -19,8 +19,11 @@ enum SGColors {
     static let inkPrimaryLight = Color(hex: 0x2B2926)
     static let inkSecondaryLight = Color(hex: 0x7A7067)
     static let borderLightWarm = Color(hex: 0xD8C8B8)
-    static let accentLightMuted = Color(hex: 0x8F5BC8)
-    static let accentSubtleLight = Color(hex: 0xD8B7F5)
+    // MARK: Kapućino akcent (topla espresso / latte — nekada ljubičasti #9D42F0)
+    /// Light: prigušena espresso smeđa za primary CTA pozadinu (**krem** label).
+    static let accentLightMuted = Color(hex: 0x6B5344)
+    /// Light: vrlo blaga „foam” nijansa za haloe / ivice akcenta.
+    static let accentSubtleLight = Color(hex: 0xE8DDCF)
     /// Vignette / edge wash on light paper (muted umber — not harsh black).
     static let vignetteWarm = Color(hex: 0x5C4334)
 
@@ -46,8 +49,10 @@ enum SGColors {
     static let textLight = Color(hex: 0x1C1C1C)
     static let textDark = Color(hex: 0xF5F5F5)
     static let textSecondary = Color(hex: 0x8A8A8A)
-    static let accent = Color(hex: 0x9D42F0)
-    static let accentSubtle = Color(hex: 0xCFA8FF)
+    /// Dark (i globalni „živi” akcent): **karamel / medium roast** za CTA na tamnoj površi.
+    static let accent = Color(hex: 0xA67C52)
+    /// Dark: svežije **latte‑foam** kao sekundarni akcent i obrub.
+    static let accentSubtle = Color(hex: 0xD9C9B4)
     static let borderLight = Color(hex: 0xE5E5E5)
     static let borderDark = Color(hex: 0x3A3A3A)
 }

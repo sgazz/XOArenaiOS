@@ -9,6 +9,37 @@ import Foundation
 enum TicTacToeAI: Sendable {
     typealias RankedMove = (index: Int, score: Int)
 
+    private struct MinimaxCacheKey: Hashable {
+        var encodedMarks: UInt32
+        let aiMark: Mark
+        let humanMark: Mark
+        let maximizingForAI: Bool
+
+        init(board: XOBoard, aiMark: Mark, humanMark: Mark, maximizingForAI: Bool) {
+            self.encodedMarks = Self.encodeMarks(board)
+            self.aiMark = aiMark
+            self.humanMark = humanMark
+            self.maximizingForAI = maximizingForAI
+        }
+
+        /// Base-3 packing of the nine cell marks (order matches **cell index**).
+        private static func encodeMarks(_ board: XOBoard) -> UInt32 {
+            var code: UInt32 = 0
+            var mul: UInt32 = 1
+            for cell in board.cells {
+                let t: UInt32
+                switch cell.mark {
+                case .empty: t = 0
+                case .x: t = 1
+                case .o: t = 2
+                }
+                code &+= t &* mul
+                mul &*= 3
+            }
+            return code
+        }
+    }
+
     /// All legal AI moves scored from the AI perspective (**leaf: win +1 · loss −1 · draw 0**), **descending `score`**, then ascending **`index`** for ties.
     static func rankedMoves(on board: XOBoard, aiMark: Mark, humanMark: Mark) -> [RankedMove] {
         precondition(aiMark == .o || aiMark == .x)
@@ -16,6 +47,7 @@ enum TicTacToeAI: Sendable {
         precondition(aiMark != humanMark)
         guard board.playState == .inProgress else { return [] }
 
+        var minimaxCache: [MinimaxCacheKey: Int] = [:]
         var rows: [RankedMove] = []
         for cell in emptyIndices(on: board) {
             guard let child = boardByPlacing(board, at: cell, mark: aiMark) else { continue }
@@ -23,7 +55,8 @@ enum TicTacToeAI: Sendable {
                 board: child,
                 aiMark: aiMark,
                 humanMark: humanMark,
-                maximizingForAI: false
+                maximizingForAI: false,
+                cache: &minimaxCache
             )
             rows.append((cell, score))
         }
@@ -122,8 +155,7 @@ enum TicTacToeAI: Sendable {
         guard let best = ranked.first else { return nil }
         let topScore = best.score
         let bestBucketSorted = ranked.filter { $0.score == topScore }.map(\.index).sorted()
-        let secondTierFirst = ranked.first(where: { $0.score < topScore })
-        let secondIndex = secondTierFirst?.index
+        let secondTierSorted = ranked.filter { $0.score < topScore }.map(\.index).sorted()
 
         let u = randomUnit()
         switch pressure {
@@ -131,13 +163,18 @@ enum TicTacToeAI: Sendable {
             if u < 0.90 {
                 return pickSortedUniform(from: bestBucketSorted, randomUnit: randomUnit)
             }
-            return secondIndex ?? pickSortedUniform(from: bestBucketSorted, randomUnit: randomUnit)
+            if !secondTierSorted.isEmpty {
+                return pickSortedUniform(from: secondTierSorted, randomUnit: randomUnit)
+            }
+            return pickSortedUniform(from: bestBucketSorted, randomUnit: randomUnit)
 
         case .low:
             if u < 0.80 {
                 return pickSortedUniform(from: bestBucketSorted, randomUnit: randomUnit)
             }
-            if let s = secondIndex { return s }
+            if !secondTierSorted.isEmpty {
+                return pickSortedUniform(from: secondTierSorted, randomUnit: randomUnit)
+            }
             let top3Sorted = ranked.prefix(min(3, ranked.count)).map(\.index).sorted()
             return pickSortedUniform(from: top3Sorted, randomUnit: randomUnit)
 
@@ -204,39 +241,47 @@ enum TicTacToeAI: Sendable {
         board: XOBoard,
         aiMark: Mark,
         humanMark: Mark,
-        maximizingForAI: Bool
+        maximizingForAI: Bool,
+        cache: inout [MinimaxCacheKey: Int]
     ) -> Int {
+        let key = MinimaxCacheKey(board: board, aiMark: aiMark, humanMark: humanMark, maximizingForAI: maximizingForAI)
+        if let hit = cache[key] { return hit }
+
+        let value: Int
         if let w = BoardEvaluator.winner(in: board) {
-            if w == aiMark { return 1 }
-            if w == humanMark { return -1 }
-            return 0
-        }
-        if BoardEvaluator.isDraw(board) { return 0 }
-
-        let markToPlay = maximizingForAI ? aiMark : humanMark
-        let empties = emptyIndices(on: board)
-
-        if maximizingForAI {
-            var value = Int.min
-            for cell in empties {
-                guard let child = boardByPlacing(board, at: cell, mark: markToPlay) else { continue }
-                value = max(
-                    value,
-                    minimax(board: child, aiMark: aiMark, humanMark: humanMark, maximizingForAI: false)
-                )
-            }
-            return value
+            if w == aiMark { value = 1 }
+            else if w == humanMark { value = -1 }
+            else { value = 0 }
+        } else if BoardEvaluator.isDraw(board) {
+            value = 0
         } else {
-            var value = Int.max
-            for cell in empties {
-                guard let child = boardByPlacing(board, at: cell, mark: markToPlay) else { continue }
-                value = min(
-                    value,
-                    minimax(board: child, aiMark: aiMark, humanMark: humanMark, maximizingForAI: true)
-                )
+            let markToPlay = maximizingForAI ? aiMark : humanMark
+            let empties = emptyIndices(on: board)
+
+            if maximizingForAI {
+                var maxV = Int.min
+                for cell in empties {
+                    guard let child = boardByPlacing(board, at: cell, mark: markToPlay) else { continue }
+                    maxV = max(
+                        maxV,
+                        minimax(board: child, aiMark: aiMark, humanMark: humanMark, maximizingForAI: false, cache: &cache)
+                    )
+                }
+                value = maxV
+            } else {
+                var minV = Int.max
+                for cell in empties {
+                    guard let child = boardByPlacing(board, at: cell, mark: markToPlay) else { continue }
+                    minV = min(
+                        minV,
+                        minimax(board: child, aiMark: aiMark, humanMark: humanMark, maximizingForAI: true, cache: &cache)
+                    )
+                }
+                value = minV
             }
-            return value
         }
+        cache[key] = value
+        return value
     }
 
     /// One ply: lowest-index empty whose fill by **`mark`** wins on **`board`**.
@@ -284,18 +329,23 @@ enum TicTacToeAI: Sendable {
         for i in w.indices { w[i] /= s }
     }
 
-    /// **`weights`** matches **`count`**; consumes one **`randomUnit`** draw.
+    /// **`weights`** should align with **`count`**; if not, values are truncated or padded with equal positive weights, then normalized.
     private static func weightedPick(count: Int, weights: [Double], randomUnit: () -> Double) -> Int {
         guard count > 0 else { return 0 }
         guard count > 1 else {
             _ = randomUnit()
             return 0
         }
-        var w = weights
-        if w.count != count {
-            w = (0..<count).map { i in i < weights.count ? weights[i] : (weights.last ?? 1) / Double(count) }
-            normalize(&w)
+        var w: [Double] = (0..<count).map { i in
+            if i < weights.count { return max(weights[i], 0) }
+            return 1
         }
+        var sum = w.reduce(0, +)
+        if sum <= 0 || !sum.isFinite {
+            w = Array(repeating: 1, count: count)
+            sum = Double(count)
+        }
+        for i in w.indices { w[i] /= sum }
         var u = randomUnit()
         if u >= 1 { u = nextafter(u, 0) }
         var acc = 0.0

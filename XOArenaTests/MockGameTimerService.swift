@@ -38,7 +38,12 @@ final class MockGameTimerService: GameTimerControlling {
 
     /// Jedna „sekunda“ **`GameTimerService`**: pomeri test sat i okini tick (vrednost se ignoriše kad VM koristi **`activeClockDeadline`**).
     func simulateOneSecondPassed() {
-        clock.advance(by: 1)
+        advanceClockAndDeliverTick(seconds: 1)
+    }
+
+    /// Jedan nominalni **`onTick`**, ali sat unapredi za **`wholeSeconds`** + **`lateSlip`** (npr. **0…1** kao kašnjenje run‑loop‑a uz idealni **+1s** interval).
+    func advanceClockAndDeliverTick(seconds wholeSeconds: TimeInterval, lateSlip: TimeInterval = 0) {
+        clock.advance(by: wholeSeconds + lateSlip)
         onTick?(0)
     }
 

@@ -20,6 +20,12 @@ final class GameTimerTests: XCTestCase {
 
         XCTAssertEqual(vm.selectedDuration, .oneMinute)
         XCTAssertEqual(vm.remainingSeconds, 60)
+        XCTAssertFalse(vm.isTimerRunning)
+        XCTAssertNil(timer.startedSeconds)
+
+        vm.makeMove(boardIndex: 0, cellIndex: 0)
+
+        XCTAssertEqual(vm.currentMark, .o)
         XCTAssertTrue(vm.isTimerRunning)
         XCTAssertEqual(timer.startedSeconds, 60)
     }
@@ -29,12 +35,17 @@ final class GameTimerTests: XCTestCase {
         let vm = makeVM(timer: timer)
 
         vm.startNewGame(mode: .soloFocus, duration: .oneMinute)
+        vm.makeMove(boardIndex: 0, cellIndex: 0)
+
+        XCTAssertEqual(vm.currentMark, .o)
+        XCTAssertTrue(vm.isTimerRunning)
+
         timer.simulateFinish()
         await Task.yield()
 
         XCTAssertEqual(vm.sessionState, .completed)
         XCTAssertEqual(vm.remainingSeconds, 0)
-        XCTAssertEqual(vm.completionReason, .xTimedOut)
+        XCTAssertEqual(vm.completionReason, .oTimedOut)
         XCTAssertTrue(vm.isInputLocked)
     }
 
@@ -43,9 +54,14 @@ final class GameTimerTests: XCTestCase {
         let vm = makeVM(timer: timer)
 
         vm.startNewGame(mode: .localDuel, duration: .fiveMinutes)
+        vm.makeMove(boardIndex: 0, cellIndex: 0)
+        XCTAssertEqual(vm.currentMark, .o)
+
         timer.simulateSecondsPassed(59)
         await Task.yield()
         XCTAssertEqual(vm.remainingSeconds, 241)
+        XCTAssertEqual(vm.oRemainingSeconds, 241)
+        XCTAssertEqual(vm.xRemainingSeconds, 300)
 
         vm.resetGame()
         XCTAssertEqual(vm.remainingSeconds, 300)
@@ -91,14 +107,17 @@ final class GameTimerTests: XCTestCase {
         let timer = MockGameTimerService()
         let vm = makeVM(timer: timer)
         vm.startNewGame(mode: .soloFocus, duration: .oneMinute)
+        vm.makeMove(boardIndex: 0, cellIndex: 0)
         timer.simulateFinish()
-        await Task.yield()
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(vm.sessionState, .completed)
 
         let before = vm.stats.totalMoves
         vm.makeMove(boardIndex: 0, cellIndex: 0)
 
         XCTAssertEqual(vm.stats.totalMoves, before)
-        XCTAssertEqual(vm.boards[0].cells[0].mark, .empty)
+        XCTAssertEqual(vm.boards[0].cells[0].mark, .x)
         XCTAssertEqual(vm.sessionState, .completed)
     }
 }

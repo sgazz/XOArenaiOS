@@ -14,6 +14,8 @@ struct SessionCompletionModal: View {
     let stats: GameStats
     let reason: CompletionReason
     let gameMode: GameMode
+    /// Za **vsAI** / **learning**: čovekov simbol (etikete u rezimeu).
+    var humanPlayerMark: Mark? = nil
     let learningProfile: LearningProfile?
     let onPlayAgain: () -> Void
 
@@ -36,6 +38,7 @@ struct SessionCompletionModal: View {
                     stats: stats,
                     reason: reason,
                     gameMode: gameMode,
+                    humanPlayerMark: humanPlayerMark,
                     learningProfile: learningProfile,
                     onPlayAgain: onPlayAgain,
                     appearPhase: appearPhase
@@ -75,6 +78,8 @@ private struct SessionCompletionCard: View {
     let stats: GameStats
     let reason: CompletionReason
     let gameMode: GameMode
+    /// **nil**: zadržati starije „You **(X)** / AI **(O)**“ kao podrazumevano.
+    var humanPlayerMark: Mark?
     let learningProfile: LearningProfile?
     let onPlayAgain: () -> Void
     var appearPhase: CGFloat
@@ -161,7 +166,9 @@ private struct SessionCompletionCard: View {
 
     private var xCaption: String {
         switch gameMode {
-        case .vsAI, .learning: return "You (X)"
+        case .vsAI, .learning:
+            guard let h = humanPlayerMark else { return "You (X)" }
+            return h == .x ? "You (X)" : "AI (X)"
         case .soloFocus, .localDuel, .aiVsAI:
             return "X"
         }
@@ -169,7 +176,9 @@ private struct SessionCompletionCard: View {
 
     private var oCaption: String {
         switch gameMode {
-        case .vsAI, .learning: return "AI (O)"
+        case .vsAI, .learning:
+            guard let h = humanPlayerMark else { return "AI (O)" }
+            return h == .o ? "You (O)" : "AI (O)"
         case .soloFocus, .localDuel, .aiVsAI:
             return "O"
         }

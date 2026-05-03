@@ -44,6 +44,7 @@ final class VsAIGameplayTests: XCTestCase {
         let timer = MockGameTimerService()
         let vm = makeVM(timer: timer)
         vm.startNewGame(mode: .vsAI, duration: .oneMinute)
+        vm.makeMove(boardIndex: 0, cellIndex: 0)
 
         let before = vm.stats.totalMoves
         timer.simulateFinish()

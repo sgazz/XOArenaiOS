@@ -5,7 +5,7 @@
 
 import Foundation
 
-/// Classifies human **X** moves on one slab and updates **`LearningProfile`** (no **`GameEngine`** mutations).
+/// Classifies human poteze na tabli i ažurira **`LearningProfile`** (čovek vs **AI** oznaka dolazi iz pozivača).
 enum LearningAnalyzer: Sendable {
     private static let centerIndex = 4
     private static let cornerIndices: Set<Int> = [0, 2, 6, 8]
@@ -15,22 +15,36 @@ enum LearningAnalyzer: Sendable {
     static func applyBoardOutcomeDelta(
         before: GameStats,
         after: GameStats,
+        humanControlledMark: Mark,
         profile: inout LearningProfile
     ) {
         let dx = after.xBoardWins - before.xBoardWins
         let dO = after.oBoardWins - before.oBoardWins
         let dD = after.boardDraws - before.boardDraws
-        if dx > 0 { profile.humanWins += dx }
-        if dO > 0 { profile.aiWins += dO }
+        if dx > 0 {
+            if humanControlledMark == .x {
+                profile.humanWins += dx
+            } else {
+                profile.aiWins += dx
+            }
+        }
+        if dO > 0 {
+            if humanControlledMark == .o {
+                profile.humanWins += dO
+            } else {
+                profile.aiWins += dO
+            }
+        }
         if dD > 0 { profile.draws += dD }
         profile.recomputeProgressAndLevel()
     }
 
-    /// Analyze a confirmed human (**X**) move on the active slab.
+    /// Analyze a confirmed human move; **`aiMark`** je protivnik (tipično blok na njegov pobednički hod).
     static func processHumanMove(
         preBoard: XOBoard,
         postBoard: XOBoard,
         cellIndex: Int,
+        aiMark: Mark,
         profile: inout LearningProfile
     ) {
         profile.totalHumanMoves += 1
@@ -39,7 +53,7 @@ enum LearningAnalyzer: Sendable {
         let centerEmptyBefore = preBoard.cells[centerIndex].mark == .empty
         let earlyBoard = nonEmptyCellCount(on: preBoard) <= 3
 
-        let oThreatCell = immediateWinningCell(for: .o, on: preBoard)
+        let oThreatCell = immediateWinningCell(for: aiMark, on: preBoard)
         var message: String?
 
         if let mustBlock = oThreatCell {

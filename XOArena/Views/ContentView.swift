@@ -8,6 +8,7 @@ import SwiftUI
 struct ContentView: View {
     @State private var gameViewModel = GameViewModel()
     @State private var showGame = false
+    @State private var showPvAISetup = false
     @State private var selectedDuration: GameDuration = .oneMinute
     @StateObject private var themeManager = SGThemeManager()
 
@@ -49,10 +50,8 @@ struct ContentView: View {
                             gameViewModel.startNewGame(mode: .soloFocus, duration: duration)
                             showGame = true
                         },
-                        onVsAI: { duration in
-                            gameViewModel.selectDuration(duration)
-                            gameViewModel.startNewGame(mode: .vsAI, duration: duration)
-                            showGame = true
+                        onVsAI: {
+                            showPvAISetup = true
                         },
                         onLearning: { duration in
                             gameViewModel.selectDuration(duration)
@@ -76,6 +75,21 @@ struct ContentView: View {
                     )
                     .navigationDestination(isPresented: $showGame) {
                         GameView(viewModel: gameViewModel)
+                    }
+                    .sheet(isPresented: $showPvAISetup) {
+                        PvAISetupSheet { symbol, first in
+                            gameViewModel.selectDuration(selectedDuration)
+                            gameViewModel.startNewGame(
+                                mode: .vsAI,
+                                duration: selectedDuration,
+                                pvaiHumanMark: symbol.mark,
+                                pvaiFirstMover: first
+                            )
+                            showPvAISetup = false
+                            showGame = true
+                        }
+                        .presentationDetents([.medium])
+                        .presentationDragIndicator(.visible)
                     }
                 }
                 .transition(.opacity)
