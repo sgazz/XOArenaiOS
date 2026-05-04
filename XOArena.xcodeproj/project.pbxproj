@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		CFF200062FA4DBE700796BAD /* XOArena Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = CFF200042FA4DBE700796BAD /* XOArena Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		CFF200082FA4DBE700796BAD /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -23,41 +27,27 @@
 		};
 /* End PBXContainerItemProxy section */
 
-/* Begin PBXBuildFile section */
-		CFF200062FA4DBE700796BAD /* XOArena Watch App.app in Embed Watch Content */ = {
-			isa = PBXBuildFile;
-			fileRef = CFF200042FA4DBE700796BAD /* XOArena Watch App.app */;
-			settings = {
-				ATTRIBUTES = (
-					RemoveHeadersOnCopy,
-				);
-			};
+/* Begin PBXCopyFilesBuildPhase section */
+		CFF200052FA4DBE700796BAD /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Watch;
+			dstSubfolderSpec = 16;
+			files = (
+				CFF200062FA4DBE700796BAD /* XOArena Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
 		};
-/* End PBXBuildFile section */
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		CFF200042FA4DBE700796BAD /* XOArena Watch App.app */ = {
-			isa = PBXFileReference;
-			explicitFileType = wrapper.application;
-			includeInIndex = 0;
-			path = "XOArena Watch App.app";
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
+		CFF200042FA4DBE700796BAD /* XOArena Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "XOArena Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		CFF246842FA4DBE700796BAD /* XOArena.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = XOArena.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CFFA00022FA4DBE700796BAD /* XOArenaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = XOArenaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		CFF246862FA4DBE700796BAD /* XOArena */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = XOArena;
-			sourceTree = "<group>";
-		};
-		CFFA00002FA4DBE700796BAD /* XOArenaTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = XOArenaTests;
-			sourceTree = "<group>";
-		};
 		CFF200012FA4DBE700796BAD /* XOArenaShared */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = XOArenaShared;
@@ -68,9 +58,26 @@
 			path = XOArenaWatch;
 			sourceTree = "<group>";
 		};
+		CFF246862FA4DBE700796BAD /* XOArena */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = XOArena;
+			sourceTree = "<group>";
+		};
+		CFFA00002FA4DBE700796BAD /* XOArenaTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = XOArenaTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		CFF2000B2FA4DBE700796BAD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		CFF246812FA4DBE700796BAD /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -79,13 +86,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		CFFA00072FA4DBE700796BAD /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		CFF2000B2FA4DBE700796BAD /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -119,6 +119,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		CFF200032FA4DBE700796BAD /* XOArena Watch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CFF200092FA4DBE700796BAD /* Build configuration list for PBXNativeTarget "XOArena Watch App" */;
+			buildPhases = (
+				CFF2000A2FA4DBE700796BAD /* Sources */,
+				CFF2000B2FA4DBE700796BAD /* Frameworks */,
+				CFF2000C2FA4DBE700796BAD /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				CFF200012FA4DBE700796BAD /* XOArenaShared */,
+				CFF200022FA4DBE700796BAD /* XOArenaWatch */,
+			);
+			name = "XOArena Watch App";
+			packageProductDependencies = (
+			);
+			productName = "XOArena Watch App";
+			productReference = CFF200042FA4DBE700796BAD /* XOArena Watch App.app */;
+			productType = "com.apple.product-type.application";
+		};
 		CFF246832FA4DBE700796BAD /* XOArena */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = CFF2468F2FA4DBE800796BAD /* Build configuration list for PBXNativeTarget "XOArena" */;
@@ -134,8 +157,8 @@
 				CFF200072FA4DBE700796BAD /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				CFF246862FA4DBE700796BAD /* XOArena */,
 				CFF200012FA4DBE700796BAD /* XOArenaShared */,
+				CFF246862FA4DBE700796BAD /* XOArena */,
 			);
 			name = XOArena;
 			packageProductDependencies = (
@@ -166,29 +189,6 @@
 			productName = XOArenaTests;
 			productReference = CFFA00022FA4DBE700796BAD /* XOArenaTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
-		};
-		CFF200032FA4DBE700796BAD /* XOArena Watch App */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = CFF200092FA4DBE700796BAD /* Build configuration list for PBXNativeTarget "XOArena Watch App" */;
-			buildPhases = (
-				CFF2000A2FA4DBE700796BAD /* Sources */,
-				CFF2000B2FA4DBE700796BAD /* Frameworks */,
-				CFF2000C2FA4DBE700796BAD /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				CFF200022FA4DBE700796BAD /* XOArenaWatch */,
-				CFF200012FA4DBE700796BAD /* XOArenaShared */,
-			);
-			name = "XOArena Watch App";
-			packageProductDependencies = (
-			);
-			productName = "XOArena Watch App";
-			productReference = CFF200042FA4DBE700796BAD /* XOArena Watch App.app */;
-			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
@@ -234,14 +234,14 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		CFF246822FA4DBE700796BAD /* Resources */ = {
+		CFF2000C2FA4DBE700796BAD /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		CFF2000C2FA4DBE700796BAD /* Resources */ = {
+		CFF246822FA4DBE700796BAD /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -258,14 +258,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		CFF246802FA4DBE700796BAD /* Sources */ = {
+		CFF2000A2FA4DBE700796BAD /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		CFF2000A2FA4DBE700796BAD /* Sources */ = {
+		CFF246802FA4DBE700796BAD /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -281,20 +281,6 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
-/* Begin PBXCopyFilesBuildPhase section */
-		CFF200052FA4DBE700796BAD /* Embed Watch Content */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = Watch;
-			dstSubfolderSpec = 16;
-			files = (
-				CFF200062FA4DBE700796BAD /* XOArena Watch App.app in Embed Watch Content */,
-			);
-			name = "Embed Watch Content";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
-
 /* Begin PBXTargetDependency section */
 		CFF200072FA4DBE700796BAD /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -309,6 +295,78 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		CFF2000D2FA4DBE700796BAD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 83F7KY8L5Y;
+				ENABLE_PREVIEWS = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = XOArena;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = Gazza.XOArena;
+				INFOPLIST_KEY_WKRunsIndependentlyCompanionAppOptional = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = Gazza.XOArena.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "watchsimulator watchos";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.0;
+			};
+			name = Debug;
+		};
+		CFF2000E2FA4DBE700796BAD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 83F7KY8L5Y;
+				ENABLE_PREVIEWS = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = XOArena;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = Gazza.XOArena;
+				INFOPLIST_KEY_WKRunsIndependentlyCompanionAppOptional = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = Gazza.XOArena.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "watchsimulator watchos";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.0;
+			};
+			name = Release;
+		};
 		CFF2468D2FA4DBE800796BAD /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -546,81 +604,18 @@
 			};
 			name = Release;
 		};
-		CFF2000D2FA4DBE700796BAD /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 83F7KY8L5Y;
-				ENABLE_PREVIEWS = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = XOArena;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = Gazza.XOArena;
-				INFOPLIST_KEY_WKRunsIndependentlyCompanionAppOptional = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = Gazza.XOArena.watchkitapp;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "watchsimulator watchos";
-				SDKROOT = watchos;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 4;
-				WATCHOS_DEPLOYMENT_TARGET = 11.0;
-			};
-			name = Debug;
-		};
-		CFF2000E2FA4DBE700796BAD /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 83F7KY8L5Y;
-				ENABLE_PREVIEWS = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = XOArena;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = Gazza.XOArena;
-				INFOPLIST_KEY_WKRunsIndependentlyCompanionAppOptional = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = Gazza.XOArena.watchkitapp;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "watchsimulator watchos";
-				SDKROOT = watchos;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 4;
-				WATCHOS_DEPLOYMENT_TARGET = 11.0;
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		CFF200092FA4DBE700796BAD /* Build configuration list for PBXNativeTarget "XOArena Watch App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CFF2000D2FA4DBE700796BAD /* Debug */,
+				CFF2000E2FA4DBE700796BAD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		CFF2467F2FA4DBE700796BAD /* Build configuration list for PBXProject "XOArena" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -644,15 +639,6 @@
 			buildConfigurations = (
 				CFFA00092FA4DBE800796BAD /* Debug */,
 				CFFA000A2FA4DBE800796BAD /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		CFF200092FA4DBE700796BAD /* Build configuration list for PBXNativeTarget "XOArena Watch App" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				CFF2000D2FA4DBE700796BAD /* Debug */,
-				CFF2000E2FA4DBE700796BAD /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

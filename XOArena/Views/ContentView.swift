@@ -9,7 +9,7 @@ struct ContentView: View {
     @State private var gameViewModel = GameViewModel()
     @State private var showGame = false
     @State private var showPvAISetup = false
-    @State private var selectedDuration: GameDuration = .oneMinute
+    @State private var selectedDuration: GameDuration = .threeMinutes
     @StateObject private var themeManager = SGThemeManager()
 
     /// Mirrors **`@AppStorage("showIntro")`** for first-frame routing (see **`ContentView.readInitialShowSplash()`**).

@@ -72,11 +72,11 @@ final class GameViewModel {
     /// Populated while **`GameMode.learning`** is active (čovek vs adaptivni AI).
     private(set) var learningProfile: LearningProfile = .initial
 
-    private(set) var selectedDuration: GameDuration = .oneMinute
+    private(set) var selectedDuration: GameDuration = .threeMinutes
     /// Preostalo vreme na satu igrača **X** (sesija).
-    private(set) var xRemainingSeconds: Int = GameDuration.oneMinute.seconds
+    private(set) var xRemainingSeconds: Int = GameDuration.threeMinutes.seconds
     /// Preostalo vreme na satu igrača **O** (sesija).
-    private(set) var oRemainingSeconds: Int = GameDuration.oneMinute.seconds
+    private(set) var oRemainingSeconds: Int = GameDuration.threeMinutes.seconds
     /// Čiji se sat trenutno odbrojava u **`GameTimerService`** (samo jedan aktivan).
     private var timerActiveForMark: Mark?
     /// Wall-clock trenutak kada ističe preostalo vreme za **`timerActiveForMark`** (uključujući AI pauzu; ne pauzira se za **`isAIThinking`**).
@@ -327,7 +327,7 @@ final class GameViewModel {
 
     func startNewGame(
         mode: GameMode,
-        duration: GameDuration = .oneMinute,
+        duration: GameDuration = .threeMinutes,
         pvaiHumanMark: Mark? = nil,
         pvaiFirstMover: FirstMoverChoice? = nil
     ) {

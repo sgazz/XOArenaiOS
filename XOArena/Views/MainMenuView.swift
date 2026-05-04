@@ -368,7 +368,7 @@ struct MainMenuView: View {
 
     private func durationTextPicker(metrics: MainMenuLayoutMetrics, timerSelected: Font, timerUnselected: Font) -> some View {
         HStack(spacing: metrics.timerGroupSpacing) {
-            ForEach(GameDuration.allCases, id: \.self) { duration in
+            ForEach(GameDuration.allCases.filter { $0 != .noTime }, id: \.self) { duration in
                 Button {
                     selectedDuration = duration
                 } label: {
