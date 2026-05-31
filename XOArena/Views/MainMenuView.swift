@@ -13,6 +13,11 @@ private enum MainMenuPlayFocus: Equatable {
     case pvp
 }
 
+private enum MainMenuDurationOptions {
+    static let pvAI: [GameDuration] = [.thirtySeconds, .oneMinute, .threeMinutes, .fiveMinutes]
+    static let pvp: [GameDuration] = [.oneMinute, .threeMinutes, .fiveMinutes]
+}
+
 private struct MainMenuLayoutMetrics: Sendable {
     var titleBase: CGFloat
     var subtitleBase: CGFloat
@@ -201,13 +206,7 @@ struct MainMenuView: View {
         return .system(size: size, weight: .regular, design: .rounded)
     }
 
-    private func menuPvAIFont(base: CGFloat) -> Font {
-        let m = UIFontMetrics(forTextStyle: .title2)
-        let size = m.scaledValue(for: base)
-        return .system(size: size, weight: .semibold, design: .rounded)
-    }
-
-    private func menuPvPFont(base: CGFloat) -> Font {
+    private func menuModeFont(base: CGFloat) -> Font {
         let m = UIFontMetrics(forTextStyle: .title3)
         let size = m.scaledValue(for: base)
         return .system(size: size, weight: .regular, design: .rounded)
@@ -256,16 +255,25 @@ struct MainMenuView: View {
                             timerUnselected: footerFonts.unselected
                         )
                         .padding(.top, menuPlayFocus == .pvAI ? CGFloat(20) : metrics.pvaiToPvpSpacing)
+
+                        startPrimaryButton(metrics: metrics)
+                            .padding(.top, SGSpacing.xl)
                     }
                     .padding(.horizontal, SGSpacing.xl)
                     .offset(y: nudgeAboveCenter)
 
                     Spacer(minLength: 0)
                 }
-                .onAppear { applyMenuFocusFromBias() }
-                .onChange(of: menuPlayModeBias) { _, _ in applyMenuFocusFromBias() }
+                .onAppear {
+                    applyMenuFocusFromBias()
+                    syncDurationForSelectedMode()
+                }
+                .onChange(of: menuPlayModeBias) { _, _ in
+                    applyMenuFocusFromBias()
+                    syncDurationForSelectedMode()
+                }
                 .accessibilityElement(children: .contain)
-                .accessibilityHint("PvAI igra protiv veštačke inteligencije. PvP je lokalni duel dva igrača.")
+                .accessibilityHint("Choose PvAI or PvP, set options, then tap Start.")
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
@@ -328,47 +336,75 @@ struct MainMenuView: View {
         menuPlayFocus = menuPlayModeBias == .localDuel ? .pvp : .pvAI
     }
 
+    private var activeMenuDurations: [GameDuration] {
+        menuPlayFocus == .pvAI ? MainMenuDurationOptions.pvAI : MainMenuDurationOptions.pvp
+    }
+
+    private func syncDurationForSelectedMode() {
+        let allowed = activeMenuDurations
+        guard !allowed.contains(selectedDuration) else { return }
+        selectedDuration = allowed[0]
+    }
+
     private func pvaiPrimaryButton(metrics: MainMenuLayoutMetrics) -> some View {
-        Button {
-            HapticService.lightImpact()
-            menuPlayFocus = .pvAI
-            onVsAI()
-        } label: {
-            Text("PvAI")
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: 50)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(
-            SGEngravedTextButtonStyle(
-                variant: .primary(engravedIntensity: .high),
-                primaryFont: menuPvAIFont(base: metrics.pvaiBase),
-                primaryInk: themeMode == .light ? MenuStoneChrome.carveInkLight : nil
-            )
-        )
+        modeSelectorButton(title: "PvAI", focus: .pvAI, metrics: metrics)
     }
 
     private func pvpTextButton(metrics: MainMenuLayoutMetrics) -> some View {
+        modeSelectorButton(title: "PvP", focus: .pvp, metrics: metrics)
+    }
+
+    private func modeSelectorButton(title: String, focus: MainMenuPlayFocus, metrics: MainMenuLayoutMetrics) -> some View {
         Button {
-            menuPlayFocus = .pvp
-            onLocalDuel(selectedDuration)
+            HapticService.lightImpact()
+            menuPlayFocus = focus
+            syncDurationForSelectedMode()
         } label: {
-            Text("PvP")
+            Text(title)
                 .frame(maxWidth: .infinity)
-                .frame(minHeight: 50)
+                .frame(minHeight: 44)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(
-            SGEngravedTextButtonStyle(
-                variant: .secondary(opacity: 0.5),
-                secondaryFont: menuPvPFont(base: metrics.pvpBase)
-            )
-        )
+        .buttonStyle(MenuModeSelectorStyle(isSelected: menuPlayFocus == focus, font: menuModeFont(base: metrics.pvaiBase)))
+        .accessibilityAddTraits(menuPlayFocus == focus ? .isSelected : [])
+    }
+
+    private func startPrimaryButton(metrics: MainMenuLayoutMetrics) -> some View {
+        Button {
+            HapticService.mediumImpact()
+            launchSelectedMode()
+        } label: {
+            Text("Start")
+                .font(.system(size: metrics.pvaiBase, weight: .semibold, design: .rounded))
+                .foregroundStyle(XOTheme.tokens(for: themeMode).primaryButtonLabel)
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: 48)
+                .background(
+                    RoundedRectangle(cornerRadius: SGRadius.md, style: .continuous)
+                        .fill(XOTheme.tokens(for: themeMode).accent)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: SGRadius.md, style: .continuous)
+                        .strokeBorder(XOTheme.tokens(for: themeMode).accentSubtle.opacity(themeMode == .light ? 0.45 : 0.5), lineWidth: 1)
+                )
+        }
+        .buttonStyle(MenuStartPressStyle())
+        .accessibilityLabel("Start")
+        .accessibilityHint(menuPlayFocus == .pvAI ? "Starts a PvAI match." : "Starts a local PvP match.")
+    }
+
+    private func launchSelectedMode() {
+        switch menuPlayFocus {
+        case .pvAI:
+            onVsAI()
+        case .pvp:
+            onLocalDuel(selectedDuration)
+        }
     }
 
     private func durationTextPicker(metrics: MainMenuLayoutMetrics, timerSelected: Font, timerUnselected: Font) -> some View {
         HStack(spacing: metrics.timerGroupSpacing) {
-            ForEach(GameDuration.allCases.filter { $0 != .noTime }, id: \.self) { duration in
+            ForEach(activeMenuDurations, id: \.self) { duration in
                 Button {
                     selectedDuration = duration
                 } label: {
@@ -388,7 +424,51 @@ struct MainMenuView: View {
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Session duration")
+        .accessibilityLabel(menuPlayFocus == .pvAI ? "PvAI match duration" : "Session duration")
         .accessibilityValue(selectedDuration.title)
+    }
+}
+
+// MARK: - Mode selector + Start press styles
+
+private struct MenuModeSelectorStyle: ButtonStyle {
+    @Environment(\.sgThemeMode) private var themeMode
+
+    var isSelected: Bool
+    var font: Font
+
+    private var t: XOTheme.Tokens { XOTheme.tokens(for: themeMode) }
+
+    private var ink: Color {
+        SGEngravedTextTheme.defaultInk(for: themeMode)
+    }
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(font)
+            .foregroundStyle(ink.opacity(isSelected ? 0.96 : 0.52))
+            .background(
+                RoundedRectangle(cornerRadius: SGRadius.md, style: .continuous)
+                    .fill(isSelected ? t.surface.opacity(themeMode == .light ? 0.72 : 0.38) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: SGRadius.md, style: .continuous)
+                    .strokeBorder(
+                        isSelected ? t.accentSubtle.opacity(themeMode == .light ? 0.55 : 0.45) : t.border.opacity(0.35),
+                        lineWidth: 1
+                    )
+            )
+            .opacity(configuration.isPressed ? 0.88 : 1)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+private struct MenuStartPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .opacity(configuration.isPressed ? 0.92 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }

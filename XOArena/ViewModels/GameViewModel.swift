@@ -60,6 +60,7 @@ final class GameViewModel {
     /// Human cannot place marks while AI “thinks” ili kada nije red na **`humanControlledMark`**; **`aiVsAI`** je potpuno automatski.
     var isInputLocked: Bool {
         guard session.sessionState == .playing else { return true }
+        if isPaused { return true }
         if isAIThinking { return true }
         if session.gameMode == .aiVsAI { return true }
         if session.gameMode == .vsAI || session.gameMode == .learning {
@@ -83,6 +84,7 @@ final class GameViewModel {
     private var activeClockDeadline: Date?
     private(set) var isTimerRunning: Bool = false
     private(set) var completionReason: CompletionReason?
+    private(set) var isPaused: Bool = false
 
     /// Dok nema ni jednog markera na ijednoj tabli, ne palimo **`GameTimerService`** (**`scheduleAIIfNeeded`** i dalje radi).
     @ObservationIgnored private var playClockSuspendedUntilFirstMark: Bool = false
@@ -300,6 +302,7 @@ final class GameViewModel {
     }
 
     func allowsHumanPlacement(boardIndex: Int, cellIndex: Int) -> Bool {
+        guard !isPaused else { return false }
         let focused = focusedBoardIndex.map { $0 == boardIndex } ?? false
         let cellMark = boards[safe: boardIndex]?.cells[safe: cellIndex]?.mark ?? .empty
         let slab = boards[safe: boardIndex]?.playState ?? .drawn
@@ -331,6 +334,7 @@ final class GameViewModel {
         pvaiHumanMark: Mark? = nil,
         pvaiFirstMover: FirstMoverChoice? = nil
     ) {
+        isPaused = false
         selectedDuration = duration
         let full = duration.seconds
         xRemainingSeconds = full
@@ -381,6 +385,7 @@ final class GameViewModel {
     }
 
     func makeMove(boardIndex: Int, cellIndex: Int) {
+        guard !isPaused else { return }
         guard HumanInputGate.permitsCellPlacement(
             gameMode: session.gameMode,
             sessionState: session.sessionState,
@@ -478,6 +483,7 @@ final class GameViewModel {
     }
 
     func resetGame() {
+        isPaused = false
         let full = selectedDuration.seconds
         xRemainingSeconds = full
         oRemainingSeconds = full
@@ -526,6 +532,7 @@ final class GameViewModel {
     }
 
     func advanceToNextBoard() {
+        guard !isPaused else { return }
         guard session.sessionState == .playing else { return }
         guard !isAIThinking else { return }
         if session.gameMode == .aiVsAI { return }
@@ -553,12 +560,41 @@ final class GameViewModel {
         }
     }
 
+    func pauseGame() {
+        guard session.sessionState == .playing else { return }
+        guard !isPaused else { return }
+        isPaused = true
+        snapOutgoingClockFromDeadlineBeforeStopping()
+        stopTimer()
+        cancelAIPipeline(debugLogCancel: true)
+    }
+
+    func resumeGame() {
+        guard isPaused else { return }
+        guard session.sessionState == .playing else {
+            isPaused = false
+            return
+        }
+        isPaused = false
+        startTimerIfNeeded()
+        scheduleAIIfNeeded()
+    }
+
+    func prepareToExitGame() {
+        isPaused = false
+        snapOutgoingClockFromDeadlineBeforeStopping()
+        stopTimer()
+        cancelAIPipeline(debugLogCancel: true)
+    }
+
     func onGameViewAppear() {
+        guard !isPaused else { return }
         startTimerIfNeeded()
         scheduleAIIfNeeded()
     }
 
     func onGameViewDisappear() {
+        isPaused = false
         cancelTimeRewardFeedback()
         stopTimer()
         cancelAIPipeline(debugLogCancel: true)
@@ -578,6 +614,7 @@ final class GameViewModel {
     }
 
     private func startTimerIfNeeded() {
+        guard !isPaused else { return }
         guard session.sessionState == .playing else { return }
         let mark = currentMark
         guard mark == .x || mark == .o else { return }
@@ -634,6 +671,7 @@ final class GameViewModel {
             onTick: { [weak self] seconds in
                 Task { @MainActor [weak self] in
                     guard let self else { return }
+                    guard !self.isPaused else { return }
                     guard self.session.sessionState == .playing else { return }
                     let live = self.session.currentMarkForActiveBoard
                     guard live == runningMark else { return }
@@ -663,6 +701,7 @@ final class GameViewModel {
             onFinished: { [weak self] in
                 Task { @MainActor [weak self] in
                     guard let self else { return }
+                    guard !self.isPaused else { return }
                     self.completeForTimeExpiryIfNeeded(finishedMark: runningMark)
                 }
             }
@@ -724,6 +763,7 @@ final class GameViewModel {
     }
 
     private func completeForTimeExpiryIfNeeded(finishedMark: Mark? = nil) {
+        guard !isPaused else { return }
         guard session.sessionState == .playing else {
             stopTimer()
             return
@@ -794,6 +834,7 @@ final class GameViewModel {
 
     /// Central AI scheduler: **`aiVsAI`** oba markera; **`vsAI`** / **`learning`** samo kada je red na **AI** marku (`humanControlledMark.nextInTurn`).
     func scheduleAIIfNeeded() {
+        guard !isPaused else { return }
         let board = activeBoardIndex
         let mark = currentMark
         let phase = currentBoardPhase
@@ -978,6 +1019,13 @@ final class GameViewModel {
             guard self.session.sessionState == .playing else {
 #if DEBUG
                 GameDebugLogger.aiMoveIgnored(reason: "session_not_playing")
+#endif
+                return
+            }
+
+            guard !self.isPaused else {
+#if DEBUG
+                GameDebugLogger.aiMoveIgnored(reason: "game_paused")
 #endif
                 return
             }

@@ -212,6 +212,28 @@ struct GameView: View {
                 }
 
                 Group {
+                    if viewModel.isPaused, viewModel.sessionState == .playing {
+                        GamePauseMenuOverlay(
+                            onResume: {
+                                viewModel.resumeGame()
+                            },
+                            onRestart: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    viewModel.resetGame()
+                                }
+                            },
+                            onMainMenu: {
+                                viewModel.prepareToExitGame()
+                                dismiss()
+                            }
+                        )
+                        .transition(.opacity)
+                        .zIndex(45)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.2), value: viewModel.isPaused)
+
+                Group {
                     if viewModel.sessionState == .completed {
                         SessionCompletionModal(
                             stats: viewModel.stats,
@@ -225,6 +247,9 @@ struct GameView: View {
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     viewModel.resetGame()
                                 }
+                            },
+                            onMainMenu: {
+                                dismiss()
                             }
                         )
                         .transition(.opacity)
@@ -270,6 +295,21 @@ struct GameView: View {
         }
         .onDisappear {
             viewModel.onGameViewDisappear()
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if viewModel.sessionState == .playing && !viewModel.isPaused {
+                    Button {
+                        HapticService.lightImpact()
+                        viewModel.pauseGame()
+                    } label: {
+                        Text("Pause")
+                            .font(.system(size: 15, weight: .medium, design: .rounded))
+                            .foregroundStyle(t.textSecondary)
+                    }
+                    .accessibilityLabel("Pause game")
+                }
+            }
         }
 #if DEBUG
         .toolbar {

@@ -6,14 +6,15 @@
 import Foundation
 
 enum GameDuration: Int, CaseIterable, Equatable, Sendable {
-    case oneMinute
-    case threeMinutes
-    case fiveMinutes
-    /// Watch vs-AI unlimited session (no shared clock); **`seconds`** is **0** (not used where untimed guards exist).
-    case noTime
+    case oneMinute = 0
+    case threeMinutes = 1
+    case fiveMinutes = 2
+    case noTime = 3
+    case thirtySeconds = 4
 
     var seconds: Int {
         switch self {
+        case .thirtySeconds: return 30
         case .oneMinute: return 60
         case .threeMinutes: return 180
         case .fiveMinutes: return 300
@@ -23,6 +24,7 @@ enum GameDuration: Int, CaseIterable, Equatable, Sendable {
 
     var title: String {
         switch self {
+        case .thirtySeconds: return "30 sec"
         case .oneMinute: return "1 min"
         case .threeMinutes: return "3 min"
         case .fiveMinutes: return "5 min"

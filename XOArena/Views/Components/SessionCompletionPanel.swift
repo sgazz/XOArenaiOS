@@ -18,6 +18,7 @@ struct SessionCompletionModal: View {
     var humanPlayerMark: Mark? = nil
     let learningProfile: LearningProfile?
     let onPlayAgain: () -> Void
+    let onMainMenu: () -> Void
 
     @State private var appearPhase: CGFloat = 0
 
@@ -41,6 +42,7 @@ struct SessionCompletionModal: View {
                     humanPlayerMark: humanPlayerMark,
                     learningProfile: learningProfile,
                     onPlayAgain: onPlayAgain,
+                    onMainMenu: onMainMenu,
                     appearPhase: appearPhase
                 )
                 .environment(\.sgThemeMode, themeMode)
@@ -50,7 +52,7 @@ struct SessionCompletionModal: View {
             .allowsHitTesting(true)
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Session complete. \(reason.subtitle). Play again.")
+        .accessibilityLabel("Session complete. \(reason.subtitle). Play again or return to main menu.")
         .onAppear {
             appearPhase = 0
             withAnimation(.easeInOut(duration: 0.2)) {
@@ -82,6 +84,7 @@ private struct SessionCompletionCard: View {
     var humanPlayerMark: Mark?
     let learningProfile: LearningProfile?
     let onPlayAgain: () -> Void
+    let onMainMenu: () -> Void
     var appearPhase: CGFloat
 
     private var t: XOTheme.Tokens { XOTheme.tokens(for: themeMode) }
@@ -137,17 +140,30 @@ private struct SessionCompletionCard: View {
                 .accessibilityLabel("Level \(lp.currentLevel.title). \(learningCoachLine(for: lp))")
             }
 
-            Button {
-                HapticService.lightImpact()
-                onPlayAgain()
-            } label: {
-                Text("Play Again")
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundStyle(cardInk.opacity(themeMode == .light ? 0.95 : 0.96))
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.top, SGSpacing.md)
+            VStack(spacing: SGSpacing.sm) {
+                Button {
+                    HapticService.lightImpact()
+                    onPlayAgain()
+                } label: {
+                    Text("Play Again")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(cardInk.opacity(themeMode == .light ? 0.95 : 0.96))
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .buttonStyle(SessionPlayAgainScaleStyle())
+
+                Button {
+                    HapticService.lightImpact()
+                    onMainMenu()
+                } label: {
+                    Text("Main Menu")
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .foregroundStyle(t.textSecondary.opacity(themeMode == .light ? 0.88 : 0.84))
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .buttonStyle(SessionPlayAgainScaleStyle())
             }
-            .buttonStyle(SessionPlayAgainScaleStyle())
+            .padding(.top, SGSpacing.md)
         }
         .padding(SessionCompletionChrome.cardPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -221,4 +237,17 @@ private struct SessionPlayAgainScaleStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
     }
+}
+
+#Preview("Session complete") {
+    SessionCompletionModal(
+        stats: GameStats(totalMoves: 42, xBoardWins: 3, oBoardWins: 2, boardDraws: 1),
+        reason: .xTimedOut,
+        gameMode: .vsAI,
+        humanPlayerMark: .x,
+        learningProfile: nil,
+        onPlayAgain: {},
+        onMainMenu: {}
+    )
+    .environment(\.sgThemeMode, .light)
 }

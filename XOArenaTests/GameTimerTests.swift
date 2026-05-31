@@ -120,5 +120,30 @@ final class GameTimerTests: XCTestCase {
         XCTAssertEqual(vm.boards[0].cells[0].mark, .x)
         XCTAssertEqual(vm.sessionState, .completed)
     }
+
+    func test_pause_freezes_clock_and_resume_restarts_timer() async throws {
+        let timer = MockGameTimerService()
+        let vm = makeVM(timer: timer)
+        vm.startNewGame(mode: .soloFocus, duration: .oneMinute)
+        vm.makeMove(boardIndex: 0, cellIndex: 0)
+
+        timer.simulateSecondsPassed(12)
+        await Task.yield()
+        let remainingAtPause = vm.remainingSeconds
+
+        vm.pauseGame()
+        XCTAssertTrue(vm.isPaused)
+        XCTAssertFalse(vm.isTimerRunning)
+        XCTAssertFalse(vm.allowsHumanPlacement(boardIndex: 0, cellIndex: 1))
+
+        timer.simulateSecondsPassed(20)
+        await Task.yield()
+        XCTAssertEqual(vm.remainingSeconds, remainingAtPause)
+
+        vm.resumeGame()
+        XCTAssertFalse(vm.isPaused)
+        XCTAssertTrue(vm.isTimerRunning)
+        XCTAssertEqual(timer.startedSeconds, remainingAtPause)
+    }
 }
 
