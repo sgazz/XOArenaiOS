@@ -6,9 +6,30 @@
 import Combine
 import SwiftUI
 
-enum SGThemeMode: Hashable, Sendable {
+enum SGThemeMode: String, CaseIterable, Hashable, Sendable {
     case light
     case dark
+    case neonPulse
+
+    /// Stable persistence / settings key (e.g. **`neonPulse`**).
+    var themeKey: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .light: return "Light"
+        case .dark: return "Dark"
+        case .neonPulse: return "Neon Pulse"
+        }
+    }
+
+    var usesLightPaper: Bool { self == .light }
+    var isNeonPulse: Bool { self == .neonPulse }
+
+    func nextSelectable() -> SGThemeMode {
+        let all = Self.allCases
+        guard let i = all.firstIndex(of: self) else { return .light }
+        return all[(i + 1) % all.count]
+    }
 }
 
 private struct SGThemeModeKey: EnvironmentKey {
@@ -22,10 +43,14 @@ extension EnvironmentValues {
     }
 }
 
-/// Default light; persisted later. Wired from `ContentView` + `ObservableObject`.
+/// Default light; cycles **Light → Dark → Neon Pulse**. Wired from `ContentView`.
 @MainActor
 final class SGThemeManager: ObservableObject {
     @Published var mode: SGThemeMode = .light
+
+    func cycleTheme() {
+        mode = mode.nextSelectable()
+    }
 }
 
 /// Ikona‑only (bez kapsula); mikro-feedback preko opacity.
@@ -37,23 +62,33 @@ private struct ToolbarThemeIconPressStyle: ButtonStyle {
     }
 }
 
-/// Quiet dev toggle — does not dominate the bar.
+/// Quiet theme picker — cycles appearance presets without dominating the bar.
 struct SGThemeToggleControl: View {
     @EnvironmentObject private var themeManager: SGThemeManager
+    @Environment(\.sgThemeMode) private var themeMode
+
+    private var iconName: String {
+        switch themeManager.mode {
+        case .light: return "sun.max.fill"
+        case .dark: return "moon.fill"
+        case .neonPulse: return "sparkles"
+        }
+    }
 
     var body: some View {
         Button {
-            themeManager.mode = themeManager.mode == .light ? .dark : .light
+            HapticService.lightImpact()
+            themeManager.cycleTheme()
         } label: {
-            Image(systemName: themeManager.mode == .light ? "moon.fill" : "sun.max.fill")
-                .font(.system(size: 18, weight: .medium))
+            Image(systemName: iconName)
+                .font(.system(size: 17, weight: .medium))
                 .symbolRenderingMode(.monochrome)
-                .foregroundStyle(themeManager.mode == .light ? SGColors.inkPrimaryLight : SGColors.textSecondary)
+                .foregroundStyle(themeManager.mode.isNeonPulse ? SGColors.neonCyan : (themeManager.mode == .light ? SGColors.inkPrimaryLight : SGColors.textSecondary))
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(ToolbarThemeIconPressStyle())
-        .accessibilityLabel(themeManager.mode == .light ? "Dark mode" : "Light mode")
-        .accessibilityHint("Prebacuje između svetlog i tamnog izgleda.")
+        .accessibilityLabel("Theme: \(themeManager.mode.displayName)")
+        .accessibilityHint("Prebacuje između Light, Dark i Neon Pulse.")
     }
 }

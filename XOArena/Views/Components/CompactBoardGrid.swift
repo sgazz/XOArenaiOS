@@ -38,9 +38,12 @@ struct CompactBoardGrid: View {
             FreehandBoardView(accent: isFocused, boardIndex: boardIndex) {
                 boardCells
             }
+            if let winLine = BoardEvaluator.winningLine(in: board)?.indices {
+                BoardWinLineGlowView(cellIndices: winLine)
+            }
             if isFocused {
                 Circle()
-                    .fill(themeMode == .light ? StoneLight.ink.opacity(0.52) : Color.white.opacity(0.38))
+                    .fill(focusDotColor)
                     .frame(width: 4, height: 4)
                     .padding(.leading, 6)
                     .padding(.top, 6)
@@ -101,6 +104,17 @@ struct CompactBoardGrid: View {
 
     private func cellDisabled(at index: Int) -> Bool {
         !permitsCellPlacement(index)
+    }
+
+    private var focusDotColor: Color {
+        switch themeMode {
+        case .light:
+            return StoneLight.ink.opacity(0.52)
+        case .dark:
+            return Color.white.opacity(0.38)
+        case .neonPulse:
+            return SGColors.neonCyan.opacity(0.82)
+        }
     }
 
     private var boardSheetOpacity: Double {

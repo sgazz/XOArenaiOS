@@ -33,6 +33,11 @@ struct SGCard<Content: View>: View {
                 return SGColors.surfaceLight.opacity(0.078)
             }
             return SGColors.surfaceLight.opacity(0.056)
+        case .neonPulse:
+            if isActive {
+                return SGColors.neonSurfaceGlass.opacity(1.15)
+            }
+            return SGColors.neonSurfaceGlass
         }
     }
 
@@ -47,6 +52,8 @@ struct SGCard<Content: View>: View {
                 return SGColors.borderDark.opacity(min(1, 0.4 * tone))
             }
             return SGColors.borderDark.opacity(min(1, 0.28 * tone))
+        case .neonPulse:
+            return SGColors.neonBorder.opacity(isActive ? min(1, 0.72 * tone) : min(1, 0.48 * tone))
         }
     }
 
@@ -63,6 +70,12 @@ struct SGCard<Content: View>: View {
                 Color.black.opacity(isActive ? 0.22 : 0.12),
                 isActive ? 4 : 2.5,
                 1.2
+            )
+        case .neonPulse:
+            return (
+                SGColors.neonCyan.opacity(isActive ? 0.22 : 0.12),
+                isActive ? 8 : 4,
+                1
             )
         }
     }

@@ -41,7 +41,7 @@ struct XOArenaLogoView: View {
             switch style {
             case .intro:
                 mark
-                    .shadow(color: .black.opacity(themeMode == .light ? 0.05 : 0.22), radius: 10, x: 0, y: 5)
+                    .shadow(color: introShadowColor, radius: themeMode.isNeonPulse ? 12 : 10, x: 0, y: themeMode.isNeonPulse ? 0 : 5)
                     .frame(maxHeight: introMaxLogoHeight)
 
             case .appIcon:
@@ -51,6 +51,14 @@ struct XOArenaLogoView: View {
             }
         }
         .allowsHitTesting(false)
+    }
+
+    private var introShadowColor: Color {
+        switch themeMode {
+        case .light: return .black.opacity(0.05)
+        case .dark: return .black.opacity(0.22)
+        case .neonPulse: return SGColors.neonMagenta.opacity(0.35)
+        }
     }
 }
 
@@ -66,6 +74,10 @@ struct MonogramSepiaInk: ViewModifier {
             content
                 .colorMultiply(Color(red: 0.90, green: 0.86, blue: 0.80))
                 .opacity(0.94)
+        case .neonPulse:
+            content
+                .colorMultiply(Color(red: 0.92, green: 0.88, blue: 0.98))
+                .opacity(0.96)
         }
     }
 }

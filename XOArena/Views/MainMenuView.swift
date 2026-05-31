@@ -144,11 +144,35 @@ private enum MenuStoneChrome {
     static let textSoft = Color(red: 107 / 255, green: 99 / 255, blue: 92 / 255)
 
     static func titleInk(_ mode: SGThemeMode) -> Color {
-        mode == .light ? carveInkLight : SGEngravedTextTheme.darkInk
+        switch mode {
+        case .light: return carveInkLight
+        case .dark: return SGEngravedTextTheme.darkInk
+        case .neonPulse: return SGColors.neonTextPrimary
+        }
     }
 
     static func taglineSoft(_ mode: SGThemeMode) -> Color {
-        mode == .light ? textSoft : Color(red: 140 / 255, green: 132 / 255, blue: 124 / 255)
+        switch mode {
+        case .light: return textSoft
+        case .dark: return Color(red: 140 / 255, green: 132 / 255, blue: 124 / 255)
+        case .neonPulse: return SGColors.neonTextSecondary
+        }
+    }
+
+    @ViewBuilder
+    static func menuBackground(_ mode: SGThemeMode) -> some View {
+        switch mode {
+        case .light:
+            gradientLight
+        case .dark:
+            gradientDark
+        case .neonPulse:
+            LinearGradient(
+                colors: [SGColors.neonGraphite, SGColors.neonGraphiteDeep],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
     }
 
     static var gradientLight: LinearGradient {
@@ -180,6 +204,7 @@ private enum MenuStoneChrome {
 struct MainMenuView: View {
     @Environment(\.sgThemeMode) private var themeMode
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @EnvironmentObject private var themeManager: SGThemeManager
     @Binding var selectedDuration: GameDuration
     @Binding var aiDifficulty: AIDifficulty
 
@@ -228,7 +253,7 @@ struct MainMenuView: View {
             let footerFonts = menuFootnoteFonts(base: metrics.auxiliaryBase)
             let nudgeAboveCenter = -geo.size.height * 0.045
             ZStack {
-                (themeMode == .light ? MenuStoneChrome.gradientLight : MenuStoneChrome.gradientDark)
+                MenuStoneChrome.menuBackground(themeMode)
 
                 VStack(spacing: 0) {
                     Spacer(minLength: 0)
@@ -279,6 +304,11 @@ struct MainMenuView: View {
         }
         .ignoresSafeArea()
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                SGThemeToggleControl()
+            }
+        }
     }
 
     private func titleTaglineCluster(metrics: MainMenuLayoutMetrics) -> some View {

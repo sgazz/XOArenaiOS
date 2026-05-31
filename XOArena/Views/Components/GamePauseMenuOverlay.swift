@@ -17,13 +17,22 @@ struct GamePauseMenuOverlay: View {
     private var t: XOTheme.Tokens { XOTheme.tokens(for: themeMode) }
 
     private var cardInk: Color {
-        themeMode == .light ? SGColors.inkPrimaryLight : SGColors.textDark
+        switch themeMode {
+        case .light: return SGColors.inkPrimaryLight
+        case .dark: return SGColors.textDark
+        case .neonPulse: return SGColors.neonTextPrimary
+        }
     }
 
     private var cardFill: Color {
-        themeMode == .light
-            ? Color(red: 243 / 255, green: 237 / 255, blue: 230 / 255)
-            : Color(red: 48 / 255, green: 45 / 255, blue: 42 / 255)
+        switch themeMode {
+        case .light:
+            return Color(red: 243 / 255, green: 237 / 255, blue: 230 / 255)
+        case .dark:
+            return Color(red: 48 / 255, green: 45 / 255, blue: 42 / 255)
+        case .neonPulse:
+            return SGColors.neonSurfaceGlass
+        }
     }
 
     var body: some View {
@@ -63,8 +72,14 @@ struct GamePauseMenuOverlay: View {
     private var cardBackground: some View {
         RoundedRectangle(cornerRadius: 16, style: .continuous)
             .fill(cardFill)
-            .shadow(color: Color.white.opacity(themeMode == .light ? 0.35 : 0.24), radius: 1, x: -1.5, y: -1.5)
-            .shadow(color: Color(red: 73 / 255, green: 58 / 255, blue: 48 / 255).opacity(themeMode == .light ? 0.2 : 0.32), radius: 3, x: 2, y: 3)
+            .overlay {
+                if themeMode.isNeonPulse {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(SGColors.neonBorder, lineWidth: 1)
+                }
+            }
+            .shadow(color: themeMode.isNeonPulse ? SGColors.neonCyan.opacity(0.2) : Color.white.opacity(themeMode == .light ? 0.35 : 0.24), radius: themeMode.isNeonPulse ? 10 : 1, x: themeMode.isNeonPulse ? 0 : -1.5, y: themeMode.isNeonPulse ? 0 : -1.5)
+            .shadow(color: themeMode.isNeonPulse ? SGColors.neonMagenta.opacity(0.14) : Color(red: 73 / 255, green: 58 / 255, blue: 48 / 255).opacity(themeMode == .light ? 0.2 : 0.32), radius: themeMode.isNeonPulse ? 6 : 3, x: themeMode.isNeonPulse ? 0 : 2, y: themeMode.isNeonPulse ? 0 : 3)
     }
 
     private func pauseActionButton(_ title: String, prominent: Bool, action: @escaping () -> Void) -> some View {

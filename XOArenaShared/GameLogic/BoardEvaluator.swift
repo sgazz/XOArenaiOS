@@ -15,13 +15,18 @@ nonisolated enum BoardEvaluator: Sendable {
 
     /// Returns winning mark (`X` or `O`) if either player completed a row, column, or diagonal with matching marks.
     static func winner(in board: XOBoard) -> Mark? {
+        winningLine(in: board)?.mark
+    }
+
+    /// Cell indices (0…8) of the completed winning trio, if any.
+    static func winningLine(in board: XOBoard) -> (mark: Mark, indices: [Int])? {
         let marks = board.cells.map(\.mark)
         for line in winLines {
             let a = marks[line[0]]
             let b = marks[line[1]]
             let c = marks[line[2]]
             guard a != .empty, a == b, b == c else { continue }
-            return a
+            return (a, line)
         }
         return nil
     }

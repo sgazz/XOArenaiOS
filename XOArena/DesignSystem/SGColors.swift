@@ -55,6 +55,23 @@ enum SGColors {
     static let accentSubtle = Color(hex: 0xD9C9B4)
     static let borderLight = Color(hex: 0xE5E5E5)
     static let borderDark = Color(hex: 0x3A3A3A)
+
+    // MARK: Neon Pulse
+    static let neonGraphite = Color(hex: 0x0E1014)
+    static let neonGraphiteDeep = Color(hex: 0x08090C)
+    static let neonSurfaceGlass = Color(hex: 0xFFFFFF).opacity(0.07)
+    static let neonCyan = Color(hex: 0x22D3EE)
+    static let neonCyanSoft = Color(hex: 0x22D3EE).opacity(0.55)
+    static let neonMagenta = Color(hex: 0xFF3CAC)
+    static let neonMagentaSoft = Color(hex: 0xFF3CAC).opacity(0.5)
+    static let neonBlue = Color(hex: 0x38BDF8)
+    static let neonLime = Color(hex: 0xA3FF12)
+    static let neonLimeSoft = Color(hex: 0xA3FF12).opacity(0.62)
+    static let neonTextPrimary = Color(hex: 0xF5F7FA)
+    static let neonTextSecondary = Color(hex: 0x9CA8B8)
+    static let neonBorder = Color(hex: 0x22D3EE).opacity(0.38)
+    static let neonAccent = Color(hex: 0xFF3CAC)
+    static let neonAccentSubtle = Color(hex: 0x22D3EE).opacity(0.42)
 }
 
 private extension Color {

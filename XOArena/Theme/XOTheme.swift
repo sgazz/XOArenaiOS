@@ -66,6 +66,25 @@ enum XOTheme {
                 shadowCalmRadius: SGShadows.calmRadius,
                 navigationBarScheme: .dark
             )
+        case .neonPulse:
+            return Tokens(
+                backgroundDeep: SGColors.neonGraphite,
+                surface: SGColors.neonSurfaceGlass,
+                surfaceMuted: SGColors.neonGraphite.opacity(0.92),
+                textPrimary: SGColors.neonTextPrimary,
+                textSecondary: SGColors.neonTextSecondary,
+                gridLine: SGColors.neonCyanSoft,
+                accent: SGColors.neonAccent,
+                accentSubtle: SGColors.neonAccentSubtle,
+                border: SGColors.neonBorder,
+                primaryButtonLabel: SGColors.neonTextPrimary,
+                secondaryButtonFill: SGColors.neonSurfaceGlass,
+                secondaryButtonLabel: SGColors.neonTextPrimary,
+                secondaryButtonBorder: SGColors.neonBorder,
+                shadowCalm: SGColors.neonCyan.opacity(0.18),
+                shadowCalmRadius: 10,
+                navigationBarScheme: .dark
+            )
         }
     }
 }

@@ -91,6 +91,13 @@ struct MarkGlyphView: View {
                 mid: SGColors.inkSecondaryLight.opacity(0.54 * Double(om)),
                 inner: SGColors.inkPrimaryLight.opacity(0.94 * Double(oi))
             )
+        case .neonPulse:
+            xTriStroke(
+                outer: SGColors.neonMagentaSoft.opacity(0.55 * Double(oo)),
+                mid: SGColors.neonMagenta.opacity(0.78 * Double(om)),
+                inner: SGColors.neonMagenta.opacity(0.98 * Double(oi))
+            )
+            .shadow(color: SGColors.neonMagentaSoft, radius: 6)
         }
     }
 
@@ -110,6 +117,13 @@ struct MarkGlyphView: View {
                 mid: SGColors.inkSecondaryLight.opacity(0.54 * Double(om)),
                 inner: SGColors.inkPrimaryLight.opacity(0.94 * Double(oi))
             )
+        case .neonPulse:
+            oTriStroke(
+                outer: SGColors.neonBlue.opacity(0.45 * Double(oo)),
+                mid: SGColors.neonCyan.opacity(0.78 * Double(om)),
+                inner: SGColors.neonCyan.opacity(0.98 * Double(oi))
+            )
+            .shadow(color: SGColors.neonCyanSoft, radius: 6)
         }
     }
 

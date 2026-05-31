@@ -9,36 +9,57 @@ import SwiftUI
 struct PaperBackgroundView: View {
     @Environment(\.sgThemeMode) private var themeMode
 
-    private var lightPaper: Bool { themeMode == .light }
+    private var lightPaper: Bool { themeMode.usesLightPaper }
+    private var neonPaper: Bool { themeMode.isNeonPulse }
 
     var body: some View {
         ZStack {
-            (lightPaper ? SGColors.paperBackgroundLight : SGColors.paperDark)
+            if neonPaper {
+                LinearGradient(
+                    colors: [SGColors.neonGraphite, SGColors.neonGraphiteDeep],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                RadialGradient(
+                    colors: [SGColors.neonCyan.opacity(0.08), Color.clear],
+                    center: .topTrailing,
+                    startRadius: 20,
+                    endRadius: 420
+                )
+                RadialGradient(
+                    colors: [SGColors.neonMagenta.opacity(0.05), Color.clear],
+                    center: .bottomLeading,
+                    startRadius: 10,
+                    endRadius: 360
+                )
+            } else {
+                (lightPaper ? SGColors.paperBackgroundLight : SGColors.paperDark)
 
-            UnevenToneWashLayer(lightPaper: lightPaper)
-                .blendMode(lightPaper ? .multiply : .softLight)
-                .opacity(lightPaper ? 0.15 : 0.28)
-                .allowsHitTesting(false)
+                UnevenToneWashLayer(lightPaper: lightPaper)
+                    .blendMode(lightPaper ? .multiply : .softLight)
+                    .opacity(lightPaper ? 0.15 : 0.28)
+                    .allowsHitTesting(false)
 
-            PaperGrainNoiseLayer(lightPaper: lightPaper)
-                .blendMode(lightPaper ? .multiply : .softLight)
-                .opacity(lightPaper ? 0.32 : 0.46)
-                .allowsHitTesting(false)
+                PaperGrainNoiseLayer(lightPaper: lightPaper)
+                    .blendMode(lightPaper ? .multiply : .softLight)
+                    .opacity(lightPaper ? 0.32 : 0.46)
+                    .allowsHitTesting(false)
 
-            PaperGrainNoiseLayer(lightPaper: lightPaper, dotScale: 0.82, jitter: 0.9)
-                .blendMode(lightPaper ? .softLight : .overlay)
-                .opacity(lightPaper ? 0.11 : 0.18)
-                .allowsHitTesting(false)
+                PaperGrainNoiseLayer(lightPaper: lightPaper, dotScale: 0.82, jitter: 0.9)
+                    .blendMode(lightPaper ? .softLight : .overlay)
+                    .opacity(lightPaper ? 0.11 : 0.18)
+                    .allowsHitTesting(false)
 
-            RadialInkVignette(lightPaper: lightPaper)
-                .blendMode(.multiply)
-                .opacity(lightPaper ? 0.2 : 0.55)
-                .allowsHitTesting(false)
+                RadialInkVignette(lightPaper: lightPaper)
+                    .blendMode(.multiply)
+                    .opacity(lightPaper ? 0.2 : 0.55)
+                    .allowsHitTesting(false)
 
-            LinearEdgeBloom(lightPaper: lightPaper)
-                .blendMode(lightPaper ? .multiply : .softLight)
-                .opacity(lightPaper ? 0.09 : 0.16)
-                .allowsHitTesting(false)
+                LinearEdgeBloom(lightPaper: lightPaper)
+                    .blendMode(lightPaper ? .multiply : .softLight)
+                    .opacity(lightPaper ? 0.09 : 0.16)
+                    .allowsHitTesting(false)
+            }
         }
     }
 }

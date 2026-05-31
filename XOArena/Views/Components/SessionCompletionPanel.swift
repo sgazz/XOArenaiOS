@@ -90,11 +90,19 @@ private struct SessionCompletionCard: View {
     private var t: XOTheme.Tokens { XOTheme.tokens(for: themeMode) }
 
     private var cardInk: Color {
-        themeMode == .light ? SGColors.inkPrimaryLight : SGColors.textDark
+        switch themeMode {
+        case .light: return SGColors.inkPrimaryLight
+        case .dark: return SGColors.textDark
+        case .neonPulse: return SGColors.neonTextPrimary
+        }
     }
 
     private var cardFill: Color {
-        themeMode == .light ? SessionCompletionChrome.cappuccinoLight : SessionCompletionChrome.cappuccinoDark
+        switch themeMode {
+        case .light: return SessionCompletionChrome.cappuccinoLight
+        case .dark: return SessionCompletionChrome.cappuccinoDark
+        case .neonPulse: return SGColors.neonSurfaceGlass
+        }
     }
 
     var body: some View {
@@ -172,12 +180,18 @@ private struct SessionCompletionCard: View {
         .scaleEffect(CGFloat(0.96 + 0.04 * appearPhase))
     }
 
-    /// Ugravirani „stone slab”: dvije blage sjene bez obruba.
+    /// Ugravirani „stone slab” / glass card.
     private var cardBackgroundLayers: some View {
         RoundedRectangle(cornerRadius: SessionCompletionChrome.cornerRadius, style: .continuous)
             .fill(cardFill)
-            .shadow(color: Color.white.opacity(themeMode == .light ? 0.4 : 0.28), radius: 1.25, x: -2.25, y: -2)
-            .shadow(color: Color(red: 73 / 255, green: 58 / 255, blue: 48 / 255).opacity(themeMode == .light ? 0.25 : 0.38), radius: 4, x: 2.75, y: 4)
+            .overlay {
+                if themeMode.isNeonPulse {
+                    RoundedRectangle(cornerRadius: SessionCompletionChrome.cornerRadius, style: .continuous)
+                        .strokeBorder(SGColors.neonBorder, lineWidth: 1)
+                }
+            }
+            .shadow(color: themeMode.isNeonPulse ? SGColors.neonCyan.opacity(0.16) : Color.white.opacity(themeMode == .light ? 0.4 : 0.28), radius: themeMode.isNeonPulse ? 10 : 1.25, x: themeMode.isNeonPulse ? 0 : -2.25, y: themeMode.isNeonPulse ? 0 : -2)
+            .shadow(color: themeMode.isNeonPulse ? SGColors.neonMagenta.opacity(0.12) : Color(red: 73 / 255, green: 58 / 255, blue: 48 / 255).opacity(themeMode == .light ? 0.25 : 0.38), radius: themeMode.isNeonPulse ? 6 : 4, x: themeMode.isNeonPulse ? 0 : 2.75, y: themeMode.isNeonPulse ? 0 : 4)
     }
 
     private var xCaption: String {

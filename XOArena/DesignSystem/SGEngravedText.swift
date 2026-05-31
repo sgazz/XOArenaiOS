@@ -45,7 +45,11 @@ enum SGEngravedTextTheme {
     static let darkInk = Color(red: 232 / 255, green: 227 / 255, blue: 221 / 255)
 
     static func defaultInk(for mode: SGThemeMode) -> Color {
-        mode == .light ? lightInk : darkInk
+        switch mode {
+        case .light: return lightInk
+        case .dark: return darkInk
+        case .neonPulse: return SGColors.neonTextPrimary
+        }
     }
 }
 

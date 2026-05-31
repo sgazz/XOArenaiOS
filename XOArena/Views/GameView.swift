@@ -297,6 +297,9 @@ struct GameView: View {
             viewModel.onGameViewDisappear()
         }
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                SGThemeToggleControl()
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 if viewModel.sessionState == .playing && !viewModel.isPaused {
                     Button {
