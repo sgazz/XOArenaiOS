@@ -60,18 +60,23 @@ enum SGColors {
     static let neonGraphite = Color(hex: 0x0E1014)
     static let neonGraphiteDeep = Color(hex: 0x08090C)
     static let neonSurfaceGlass = Color(hex: 0xFFFFFF).opacity(0.07)
-    static let neonCyan = Color(hex: 0x22D3EE)
-    static let neonCyanSoft = Color(hex: 0x22D3EE).opacity(0.55)
-    static let neonMagenta = Color(hex: 0xFF3CAC)
-    static let neonMagentaSoft = Color(hex: 0xFF3CAC).opacity(0.5)
+    /// Vivid tube cyan — board symbols (O).
+    static let neonCyan = Color(hex: 0x27E8FF)
+    static let neonCyanSoft = Color(hex: 0x27E8FF).opacity(0.52)
+    /// Dimmer grid lines — always below symbol brightness.
+    static let neonCyanGrid = Color(hex: 0x27E8FF).opacity(0.34)
+    /// Vivid tube magenta — board symbols (X).
+    static let neonMagenta = Color(hex: 0xFF2FAE)
+    static let neonMagentaSoft = Color(hex: 0xFF2FAE).opacity(0.5)
     static let neonBlue = Color(hex: 0x38BDF8)
     static let neonLime = Color(hex: 0xA3FF12)
-    static let neonLimeSoft = Color(hex: 0xA3FF12).opacity(0.62)
+    static let neonLimeSoft = Color(hex: 0xA3FF12).opacity(0.68)
+    static let neonWhiteCore = Color(hex: 0xFAFEFF)
     static let neonTextPrimary = Color(hex: 0xF5F7FA)
     static let neonTextSecondary = Color(hex: 0x9CA8B8)
-    static let neonBorder = Color(hex: 0x22D3EE).opacity(0.38)
-    static let neonAccent = Color(hex: 0xFF3CAC)
-    static let neonAccentSubtle = Color(hex: 0x22D3EE).opacity(0.42)
+    static let neonBorder = Color(hex: 0x27E8FF).opacity(0.38)
+    static let neonAccent = Color(hex: 0xFF2FAE)
+    static let neonAccentSubtle = Color(hex: 0x27E8FF).opacity(0.42)
 }
 
 private extension Color {

@@ -9,6 +9,8 @@ struct ContentView: View {
     @State private var gameViewModel = GameViewModel()
     @State private var showGame = false
     @State private var showPvAISetup = false
+    @State private var showOnboarding = false
+    @State private var showHelpOnboarding = false
     @State private var selectedDuration: GameDuration = .threeMinutes
     @StateObject private var themeManager = SGThemeManager()
 
@@ -71,6 +73,9 @@ struct ContentView: View {
 #else
                             _ = duration
 #endif
+                        },
+                        onShowHelp: {
+                            showHelpOnboarding = true
                         }
                     )
                     .navigationDestination(isPresented: $showGame) {
@@ -93,13 +98,40 @@ struct ContentView: View {
                     }
                 }
                 .transition(.opacity)
+                .onAppear {
+                    presentOnboardingIfNeeded()
+                }
+                .fullScreenCover(isPresented: $showOnboarding) {
+                    OnboardingView(mode: .firstLaunch) {
+                        showOnboarding = false
+                    }
+                    .environment(\.sgThemeMode, themeManager.mode)
+                    .environmentObject(themeManager)
+                }
+                .fullScreenCover(isPresented: $showHelpOnboarding) {
+                    OnboardingView(mode: .helpReplay) {
+                        showHelpOnboarding = false
+                    }
+                    .environment(\.sgThemeMode, themeManager.mode)
+                    .environmentObject(themeManager)
+                }
             }
         }
         .animation(.easeInOut(duration: 0.26), value: showSplash)
+        .onChange(of: showSplash) { _, isShowing in
+            if !isShowing {
+                presentOnboardingIfNeeded()
+            }
+        }
         .environment(\.sgThemeMode, themeManager.mode)
         .environmentObject(themeManager)
         .tint(tintColor)
         .sgToolbarStyle()
+    }
+
+    private func presentOnboardingIfNeeded() {
+        guard !OnboardingStorage.hasCompleted else { return }
+        showOnboarding = true
     }
 }
 

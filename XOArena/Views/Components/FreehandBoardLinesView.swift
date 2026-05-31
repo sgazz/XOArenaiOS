@@ -80,19 +80,18 @@ struct FreehandBoardLinesView: View {
     }
 
     private func neonPulseBoard() -> some View {
-        let line = SGColors.neonCyan
-        let accentMul: CGFloat = accent ? 1.18 : 1
-        let baseOpacity = accent ? 0.72 : 0.38
+        let line = SGColors.neonCyanGrid
+        let accentMul: CGFloat = accent ? 1.12 : 1
+        let baseOpacity = accent ? 0.48 : 0.26
         return ZStack {
             ForEach(BoardGridSlot.allCases, id: \.rawValue) { slot in
                 let v = GridLineVariation.forSlot(boardIndex: boardIndex, slot: slot)
-                let coreW = (accent ? 1.08 : 0.82) * v.strokeWidthMultiplier * accentMul
+                let coreW = (accent ? 0.92 : 0.72) * v.strokeWidthMultiplier * accentMul
                 VariFreehandBoardLine(boardIndex: boardIndex, slot: slot)
-                    .stroke(line.opacity(baseOpacity * 0.35 * v.opacityMultiplier * accentMul), style: StrokeStyle(lineWidth: (accent ? 2.4 : 1.8) * v.strokeWidthMultiplier, lineCap: .round, lineJoin: .round))
-                    .blur(radius: accent ? 2.2 : 1.4)
+                    .stroke(line.opacity(Double(baseOpacity * 0.42 * v.opacityMultiplier * accentMul)), style: StrokeStyle(lineWidth: (accent ? 1.6 : 1.2) * v.strokeWidthMultiplier, lineCap: .round, lineJoin: .round))
+                    .shadow(color: SGColors.neonCyanSoft.opacity(accent ? 0.28 : 0.14), radius: accent ? 2.5 : 1.5)
                 VariFreehandBoardLine(boardIndex: boardIndex, slot: slot)
                     .stroke(line.opacity(Double(baseOpacity * v.opacityMultiplier * accentMul)), style: StrokeStyle(lineWidth: coreW, lineCap: .round, lineJoin: .round))
-                    .shadow(color: SGColors.neonCyanSoft.opacity(accent ? 0.85 : 0.45), radius: accent ? 5 : 2.5)
             }
         }
     }

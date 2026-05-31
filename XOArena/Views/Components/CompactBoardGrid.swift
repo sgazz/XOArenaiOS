@@ -33,6 +33,10 @@ struct CompactBoardGrid: View {
         return max(0, boardSize)
     }
 
+    private var winningCellIndices: Set<Int> {
+        Set(BoardEvaluator.winningLine(in: board)?.indices ?? [])
+    }
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             FreehandBoardView(accent: isFocused, boardIndex: boardIndex) {
@@ -89,7 +93,8 @@ struct CompactBoardGrid: View {
                     boardIndex: boardIndex,
                     cellIndex: index,
                     mark: board.cells[index].mark,
-                    sessionTotalMoves: sessionTotalMoves
+                    sessionTotalMoves: sessionTotalMoves,
+                    isWinningCell: winningCellIndices.contains(index)
                 )
                 .minimumScaleFactor(0.56)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -113,7 +118,7 @@ struct CompactBoardGrid: View {
         case .dark:
             return Color.white.opacity(0.38)
         case .neonPulse:
-            return SGColors.neonCyan.opacity(0.82)
+            return SGColors.neonCyanGrid.opacity(0.65)
         }
     }
 
@@ -124,19 +129,35 @@ struct CompactBoardGrid: View {
 }
 
 private struct CellMarkReveal: View {
+    @Environment(\.sgThemeMode) private var themeMode
+
     let boardIndex: Int
     let cellIndex: Int
     let mark: Mark
     let sessionTotalMoves: Int
+    var isWinningCell: Bool = false
     @State private var inkScale: CGFloat = 1
     @State private var inkOpacity: Double = 1
+    @State private var placementPulseActive = false
     /// Zaključava broj poteza u trenutku punjenja ćelije — varijanta oznake ne mijenja se pri kasnijim potezima drugdje.
     @State private var placementMoveOrdinal: Int?
 
     private static let pulseDuration: CGFloat = 0.28
 
+    private var neonEmphasis: NeonMarkEmphasis {
+        if isWinningCell { return .winning }
+        if placementPulseActive { return .placementPulse }
+        return .standard
+    }
+
     var body: some View {
-        MarkGlyphView(mark: mark, boardIndex: boardIndex, cellIndex: cellIndex, placementMoveOrdinal: placementMoveOrdinal)
+        MarkGlyphView(
+            mark: mark,
+            boardIndex: boardIndex,
+            cellIndex: cellIndex,
+            placementMoveOrdinal: placementMoveOrdinal,
+            neonEmphasis: themeMode.isNeonPulse ? neonEmphasis : .standard
+        )
             .scaleEffect(mark == .empty ? 1 : inkScale)
             .opacity(mark == .empty ? 1 : inkOpacity)
             .onChange(of: mark) { old, new in
@@ -144,16 +165,23 @@ private struct CellMarkReveal: View {
                     if placementMoveOrdinal == nil {
                         placementMoveOrdinal = sessionTotalMoves
                     }
-                    inkScale = 0.95
-                    inkOpacity = 0.88
+                    inkScale = themeMode.isNeonPulse ? 0.92 : 0.95
+                    inkOpacity = themeMode.isNeonPulse ? 0.82 : 0.88
+                    placementPulseActive = themeMode.isNeonPulse
                     withAnimation(.easeOut(duration: Self.pulseDuration)) {
                         inkScale = 1
                         inkOpacity = 1
+                    }
+                    if themeMode.isNeonPulse {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + Double(Self.pulseDuration)) {
+                            placementPulseActive = false
+                        }
                     }
                     return
                 }
                 if new == .empty {
                     placementMoveOrdinal = nil
+                    placementPulseActive = false
                 }
             }
             .onAppear {

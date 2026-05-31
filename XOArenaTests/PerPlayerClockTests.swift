@@ -69,9 +69,9 @@ final class PerPlayerClockTests: XCTestCase {
         XCTAssertLessThan(vm.xRemainingSeconds, xBefore)
     }
 
-    func test_draw_bonus_adds_five_to_each_bank_after_board_draw() throws {
+    func test_draw_bonus_adds_two_to_each_bank_in_local_duel() throws {
         let timer = MockGameTimerService()
-        var s = GameEngine.makeInitialSession(mode: .soloFocus)
+        var s = GameEngine.makeInitialSession(mode: .localDuel)
         s.boards[0] = TestBoardFixture.board(
             with: [
                 .x, .o, .x,
@@ -84,15 +84,16 @@ final class PerPlayerClockTests: XCTestCase {
         s.activeBoardIndex = 0
 
         let vm = makeVM(timer: timer, session: s)
-        XCTAssertEqual(vm.xRemainingSeconds, GameDuration.oneMinute.seconds)
-        XCTAssertEqual(vm.oRemainingSeconds, GameDuration.oneMinute.seconds)
+        let base = GameDuration.threeMinutes.seconds
+        XCTAssertEqual(vm.xRemainingSeconds, base)
+        XCTAssertEqual(vm.oRemainingSeconds, base)
 
         vm.onGameViewAppear()
         vm.makeMove(boardIndex: 0, cellIndex: 8)
 
         XCTAssertEqual(vm.stats.boardDraws, 1)
-        XCTAssertEqual(vm.xRemainingSeconds, GameDuration.oneMinute.seconds + 5)
-        XCTAssertEqual(vm.oRemainingSeconds, GameDuration.oneMinute.seconds + 5)
+        XCTAssertEqual(vm.xRemainingSeconds, base + 2)
+        XCTAssertEqual(vm.oRemainingSeconds, base + 2)
     }
 
     func test_on_time_timer_ticks_each_reduce_active_bank_by_exactly_one_second() async throws {

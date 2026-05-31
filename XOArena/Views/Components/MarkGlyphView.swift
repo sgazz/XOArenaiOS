@@ -14,6 +14,8 @@ struct MarkGlyphView: View {
     var cellIndex: Int = 0
     /// Opcionalni broj poteza u trenutku postavljanja (zaključava seme kad view proslijedi ga iz `CellMarkReveal`).
     var placementMoveOrdinal: Int?
+    /// Neon Pulse: jači glow za pobjedničke ćelije / animaciju poteza.
+    var neonEmphasis: NeonMarkEmphasis = .standard
 
     private var strokeScale: CGFloat {
         InkVariance.strokeScale(boardIndex: boardIndex, cellIndex: cellIndex, placementMoveOrdinal: placementMoveOrdinal)
@@ -46,7 +48,9 @@ struct MarkGlyphView: View {
     }
 
     /// Vizuelno „bold“ na tabli: zajednička debljina poteza za **X** i **O** (tri sloja, isti Path).
-    private var boldStrokeBoost: CGFloat { 1.28 }
+    private var boldStrokeBoost: CGFloat {
+        themeMode.isNeonPulse ? 1.28 * NeonTubeMarkStyle.neonStrokeBoost * neonEmphasis.strokeBoost : 1.28
+    }
 
     var body: some View {
         Group {
@@ -92,12 +96,7 @@ struct MarkGlyphView: View {
                 inner: SGColors.inkPrimaryLight.opacity(0.94 * Double(oi))
             )
         case .neonPulse:
-            xTriStroke(
-                outer: SGColors.neonMagentaSoft.opacity(0.55 * Double(oo)),
-                mid: SGColors.neonMagenta.opacity(0.78 * Double(om)),
-                inner: SGColors.neonMagenta.opacity(0.98 * Double(oi))
-            )
-            .shadow(color: SGColors.neonMagentaSoft, radius: 6)
+            neonTubeStack(for: .x)
         }
     }
 
@@ -118,12 +117,64 @@ struct MarkGlyphView: View {
                 inner: SGColors.inkPrimaryLight.opacity(0.94 * Double(oi))
             )
         case .neonPulse:
-            oTriStroke(
-                outer: SGColors.neonBlue.opacity(0.45 * Double(oo)),
-                mid: SGColors.neonCyan.opacity(0.78 * Double(om)),
-                inner: SGColors.neonCyan.opacity(0.98 * Double(oi))
-            )
-            .shadow(color: SGColors.neonCyanSoft, radius: 6)
+            neonTubeStack(for: .o)
+        }
+    }
+
+    @ViewBuilder
+    private func neonTubeStack(for mark: Mark) -> some View {
+        let colors = NeonTubeMarkStyle.tubeColors(for: mark)
+        let glow = NeonTubeMarkStyle.glowColors(for: mark)
+
+        Group {
+            if mark == .x {
+                neonTubeXStroke(edge: colors.edge, mid: colors.mid, core: colors.core)
+            } else {
+                neonTubeOStroke(edge: colors.edge, mid: colors.mid, core: colors.core)
+            }
+        }
+        .shadow(color: glow.tight.opacity(neonEmphasis.tightGlowOpacity), radius: neonEmphasis.tightGlowRadius)
+        .shadow(color: glow.ambient.opacity(neonEmphasis.ambientGlowOpacity), radius: neonEmphasis.ambientGlowRadius)
+    }
+
+    private func neonTubeXStroke(edge: Color, mid: Color, core: Color) -> some View {
+        let b = boldStrokeBoost
+        let thin = xPencilThinMul
+        let lw: (CGFloat, CGFloat, CGFloat, CGFloat) = (
+            max(3.65 * strokeScale * thin * b, 3.28 * b),
+            max(2.72 * strokeScale * thin * b, 2.38 * b),
+            max(1.88 * strokeScale * thin * b, 1.62 * b),
+            max(0.92 * strokeScale * thin * b, 0.78 * b)
+        )
+        return ZStack {
+            HandDrawnXShape(variant: xVariant)
+                .stroke(edge.opacity(0.88), style: StrokeStyle(lineWidth: lw.0, lineCap: .round, lineJoin: .round))
+            HandDrawnXShape(variant: xVariant)
+                .stroke(edge, style: StrokeStyle(lineWidth: lw.1, lineCap: .round, lineJoin: .round))
+            HandDrawnXShape(variant: xVariant)
+                .stroke(mid.opacity(0.94), style: StrokeStyle(lineWidth: lw.2, lineCap: .round, lineJoin: .round))
+            HandDrawnXShape(variant: xVariant)
+                .stroke(core.opacity(0.97), style: StrokeStyle(lineWidth: lw.3, lineCap: .round, lineJoin: .round))
+        }
+    }
+
+    private func neonTubeOStroke(edge: Color, mid: Color, core: Color) -> some View {
+        let b = boldStrokeBoost
+        let lw: (CGFloat, CGFloat, CGFloat, CGFloat) = (
+            max(3.65 * strokeScale * b, 3.28 * b),
+            max(2.72 * strokeScale * b, 2.38 * b),
+            max(1.88 * strokeScale * b, 1.62 * b),
+            max(0.92 * strokeScale * b, 0.78 * b)
+        )
+        return ZStack {
+            HandDrawnOShape(variant: oVariant)
+                .stroke(edge.opacity(0.88), style: StrokeStyle(lineWidth: lw.0, lineCap: .round, lineJoin: .round))
+            HandDrawnOShape(variant: oVariant)
+                .stroke(edge, style: StrokeStyle(lineWidth: lw.1, lineCap: .round, lineJoin: .round))
+            HandDrawnOShape(variant: oVariant)
+                .stroke(mid.opacity(0.94), style: StrokeStyle(lineWidth: lw.2, lineCap: .round, lineJoin: .round))
+            HandDrawnOShape(variant: oVariant)
+                .stroke(core.opacity(0.97), style: StrokeStyle(lineWidth: lw.3, lineCap: .round, lineJoin: .round))
         }
     }
 

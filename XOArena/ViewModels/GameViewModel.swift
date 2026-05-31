@@ -122,15 +122,73 @@ final class GameViewModel {
         return String(format: "%02d:%02d", mins, secs)
     }
 
-    private static let boardDrawTimeBonusSeconds: Int = 5
-    /// vsAI / learning: pomeraj vremena kad **čovek** pobedi tablu.
-    private static let vsAILearningHumanBoardWinRewardShiftSeconds: Int = 5
-    /// Gornja granica **čovekove** banke nakon nagrade: **`selectedDuration` + ovo**.
-    private static let vsAILearningHumanTimeCapOverInitialSeconds: Int = 15
-    /// Donja granica **AI** banke nakon nagrade.
-    private static let vsAILearningAiTimeFloorAfterRewardSeconds: Int = 3
-    /// Koliko dugo drži **`latestTimeReward`** prije auto-brisanja (**~1.2s**, usklađeno sa HUD fade pulsom).
     private static let timeRewardFeedbackVisibilityNanoseconds: UInt64 = 1_220_000_000
+
+    private func effectiveAIDifficultyForRewards(in session: GameSession) -> AIDifficulty {
+        if session.gameMode == .learning {
+            return learningProfile.adaptiveAIDifficulty()
+        }
+        return session.aiDifficulty
+    }
+
+    private func applyBoardTimeEconomy(from before: GameSession, to after: GameSession) {
+        guard let outcome = TimeEconomyEngine.boardOutcome(before: before.stats, after: after.stats) else { return }
+        let aiTier = effectiveAIDifficultyForRewards(in: after)
+        guard let rules = TimeEconomyEngine.rules(for: after.gameMode, aiDifficulty: aiTier) else { return }
+        guard let context = TimeEconomyEngine.context(for: after, aiDifficulty: aiTier) else { return }
+        guard let planned = TimeEconomyEngine.plannedAdjustment(
+            outcome: outcome,
+            rules: rules,
+            context: context
+        ), !planned.isEmpty else { return }
+
+        let applied = TimeEconomyEngine.apply(
+            planned,
+            xRemaining: &xRemainingSeconds,
+            oRemaining: &oRemainingSeconds,
+            initialDurationSeconds: selectedDuration.seconds
+        )
+        guard !applied.isEmpty else { return }
+
+#if DEBUG
+        if outcome == .draw {
+            GameDebugLogger.drawBonusApplied(
+                secondsEach: max(applied.xDelta, applied.oDelta),
+                xAfter: xRemainingSeconds,
+                oAfter: oRemainingSeconds
+            )
+        } else {
+            GameDebugLogger.rewardApplied(
+                winner: applied.xDelta >= applied.oDelta ? .x : .o,
+                xAfter: xRemainingSeconds,
+                oAfter: oRemainingSeconds
+            )
+            GameDebugLogger.logReward(xTime: xRemainingSeconds, oTime: oRemainingSeconds)
+        }
+#endif
+
+        let event = timeRewardHUDEvent(applied: applied, context: context, outcome: outcome, aiTier: aiTier)
+        presentBoardWinTimeRewardFeedback(event)
+    }
+
+    private func timeRewardHUDEvent(
+        applied: TimeEconomyAdjustment,
+        context: TimeEconomyContext,
+        outcome: BoardTimeOutcome,
+        aiTier: AIDifficulty
+    ) -> TimeRewardEvent {
+        switch context {
+        case .pvp:
+            let reason: TimeRewardReason = outcome == .draw ? .pvpDraw : .pvpBoardWin
+            return TimeRewardEvent(xDelta: applied.xDelta, oDelta: applied.oDelta, reason: reason)
+        case .vsAI:
+            return TimeRewardEvent(
+                xDelta: applied.xDelta,
+                oDelta: applied.oDelta,
+                reason: .humanBoardWinAgainstAI(difficulty: aiTier)
+            )
+        }
+    }
 
     private func secondsForMark(_ mark: Mark) -> Int {
         switch mark {
@@ -153,61 +211,18 @@ final class GameViewModel {
     private func resyncClocksAfterMove(from before: GameSession, to after: GameSession, movedBoardIndex: Int? = nil) {
         snapOutgoingClockFromDeadlineBeforeStopping()
         stopTimer()
-        if after.stats.boardDraws > before.stats.boardDraws {
-            xRemainingSeconds += Self.boardDrawTimeBonusSeconds
-            oRemainingSeconds += Self.boardDrawTimeBonusSeconds
+        applyBoardTimeEconomy(from: before, to: after)
 #if DEBUG
-            GameDebugLogger.drawBonusApplied(
-                secondsEach: Self.boardDrawTimeBonusSeconds,
-                xAfter: xRemainingSeconds,
-                oAfter: oRemainingSeconds
-            )
+        if after.stats.boardDraws > before.stats.boardDraws {
             let drawBoard = movedBoardIndex ?? before.activeBoardIndex
             GameDebugLogger.logDraw(
                 board: drawBoard + 1,
                 xTime: xRemainingSeconds,
                 oTime: oRemainingSeconds
             )
-#endif
-        } else if after.gameMode == .vsAI || after.gameMode == .learning,
-                  let humanMark = after.humanControlledMark {
-            let humanWonBoard =
-                (humanMark == .x && after.stats.xBoardWins > before.stats.xBoardWins)
-                || (humanMark == .o && after.stats.oBoardWins > before.stats.oBoardWins)
-            if humanWonBoard {
-                applyHumanVsAIWinReward(humanMark: humanMark)
-#if DEBUG
-                GameDebugLogger.rewardApplied(
-                    winner: humanMark,
-                    xAfter: xRemainingSeconds,
-                    oAfter: oRemainingSeconds
-                )
-                GameDebugLogger.logReward(xTime: xRemainingSeconds, oTime: oRemainingSeconds)
-#endif
-                presentBoardWinTimeRewardFeedback(.humanBoardWinAgainstAI(humanMark: humanMark))
-            }
         }
+#endif
         startTimerIfNeeded()
-    }
-
-    private func applyHumanVsAIWinReward(humanMark: Mark) {
-        let shift = Self.vsAILearningHumanBoardWinRewardShiftSeconds
-        let cap = selectedDuration.seconds + Self.vsAILearningHumanTimeCapOverInitialSeconds
-        let floorSecs = Self.vsAILearningAiTimeFloorAfterRewardSeconds
-        switch humanMark {
-        case .x:
-            xRemainingSeconds += shift
-            oRemainingSeconds -= shift
-            xRemainingSeconds = min(xRemainingSeconds, cap)
-            oRemainingSeconds = max(oRemainingSeconds, floorSecs)
-        case .o:
-            oRemainingSeconds += shift
-            xRemainingSeconds -= shift
-            oRemainingSeconds = min(oRemainingSeconds, cap)
-            xRemainingSeconds = max(xRemainingSeconds, floorSecs)
-        case .empty:
-            break
-        }
     }
 
     private func presentBoardWinTimeRewardFeedback(_ event: TimeRewardEvent) {

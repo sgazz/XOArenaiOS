@@ -218,6 +218,7 @@ struct MainMenuView: View {
     let onLearning: (GameDuration) -> Void
     let onLocalDuel: (GameDuration) -> Void
     var onAiVsAITest: ((GameDuration) -> Void)? = nil
+    var onShowHelp: (() -> Void)? = nil
 
     private func menuTitleFont(base: CGFloat) -> Font {
         let m = UIFontMetrics(forTextStyle: .largeTitle)
@@ -305,6 +306,16 @@ struct MainMenuView: View {
         .ignoresSafeArea()
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Help") {
+                    HapticService.lightImpact()
+                    onShowHelp?()
+                }
+                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .foregroundStyle(MenuStoneChrome.taglineSoft(themeMode).opacity(0.88))
+                .accessibilityLabel("Help")
+                .accessibilityHint("Opens the gameplay tutorial.")
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 SGThemeToggleControl()
             }
