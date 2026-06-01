@@ -48,8 +48,10 @@ struct SplashExperienceView: View {
     @State private var ambientStrength: Double = 0
     @State private var timerStrength: Double = 1
     @State private var isExiting = false
-    @State private var exitStarted = false
+    @State private var hasFinishedSplash = false
     @State private var sequenceTask: Task<Void, Never>?
+    @State private var exitTask: Task<Void, Never>?
+    @State private var failsafeTask: Task<Void, Never>?
 
     private var titleInk: Color {
         themeMode == .light ? SGColors.introSerifTitleLight : SGColors.introSerifTitleDark
@@ -82,13 +84,13 @@ struct SplashExperienceView: View {
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .contentShape(Rectangle())
-            .onTapGesture { skipSplash() }
+            .onTapGesture { finishSplash(immediate: true) }
         }
         .ignoresSafeArea()
         .onAppear { beginSequence() }
-        .onDisappear { sequenceTask?.cancel() }
+        .onDisappear { cancelSplashTasks() }
         .accessibilityElement(children: .contain)
-        .accessibilityAction(.default) { skipSplash() }
+        .accessibilityAction(.default) { finishSplash(immediate: true) }
         .accessibilityHint("Double tap to skip the launch experience.")
     }
 
@@ -119,9 +121,9 @@ struct SplashExperienceView: View {
                 visible: phase == 3
             )
         }
-        .animation(crossfadeAnimation, value: phase)
-        .animation(identityAnimation, value: identityOpacity)
-        .animation(identityAnimation, value: identityScale)
+        .animation(hasFinishedSplash ? nil : crossfadeAnimation, value: phase)
+        .animation(hasFinishedSplash ? nil : identityAnimation, value: identityOpacity)
+        .animation(hasFinishedSplash ? nil : identityAnimation, value: identityScale)
     }
 
     private func identityCopy(metrics: SplashLayoutMetrics) -> some View {
@@ -191,7 +193,24 @@ struct SplashExperienceView: View {
     // MARK: - Sequence
 
     private func beginSequence() {
-        sequenceTask?.cancel()
+        cancelSplashTasks()
+        resetSplashPresentationState()
+        hasFinishedSplash = false
+        armFailsafeTimeout()
+
+        sequenceTask = Task { @MainActor in
+            do {
+                try await runSequence()
+                finishSplash(immediate: false)
+            } catch is CancellationError {
+                return
+            } catch {
+                finishSplash(immediate: true)
+            }
+        }
+    }
+
+    private func resetSplashPresentationState() {
         phase = 0
         identityOpacity = 0
         identityScale = 0.98
@@ -199,75 +218,112 @@ struct SplashExperienceView: View {
         ambientStrength = 0
         timerStrength = 1
         isExiting = false
-        exitStarted = false
+    }
 
-        sequenceTask = Task { @MainActor in
-            await runBeat {
-                withAnimation(identityAnimation) {
-                    identityOpacity = 1
-                    identityScale = 1
-                    copyOpacity = 1
-                }
+    private func runSequence() async throws {
+        guard !hasFinishedSplash else { return }
+
+        try await runBeat {
+            withAnimation(identityAnimation) {
+                identityOpacity = 1
+                identityScale = 1
+                copyOpacity = 1
             }
+        }
 
-            await advanceToPhase(1) {
-                withAnimation(ambientAnimation) { ambientStrength = 0.85 }
+        try await advanceToPhase(1) {
+            withAnimation(ambientAnimation) { ambientStrength = 0.85 }
+        }
+
+        try await advanceToPhase(2) {
+            withAnimation(ambientAnimation) {
+                ambientStrength = 1
+                timerStrength = 1.55
             }
+        }
 
-            await advanceToPhase(2) {
-                withAnimation(ambientAnimation) {
-                    ambientStrength = 1
-                    timerStrength = 1.55
-                }
-            }
-
-            await advanceToPhase(3) {
-                withAnimation(ambientAnimation) { timerStrength = 1.75 }
-            }
-
-            await completeSplash()
+        try await advanceToPhase(3) {
+            withAnimation(ambientAnimation) { timerStrength = 1.75 }
         }
     }
 
-    private func runBeat(_ updates: () -> Void) async {
-        guard !Task.isCancelled else { return }
+    private func runBeat(_ updates: () -> Void) async throws {
+        try Task.checkCancellation()
+        guard !hasFinishedSplash else { return }
         updates()
-        try? await Task.sleep(for: .seconds(SplashTimeline.beat))
+        try await Task.sleep(for: .seconds(SplashExperienceTimeline.beat))
     }
 
-    private func advanceToPhase(_ next: Int, ambientUpdate: () -> Void) async {
-        guard !Task.isCancelled else { return }
+    private func advanceToPhase(_ next: Int, ambientUpdate: () -> Void) async throws {
+        try Task.checkCancellation()
+        guard !hasFinishedSplash else { return }
         ambientUpdate()
         withAnimation(crossfadeAnimation) {
             copyOpacity = 0
         }
-        try? await Task.sleep(for: .milliseconds(accessibilityReduceMotion ? 120 : 220))
-        guard !Task.isCancelled else { return }
+        let pause = accessibilityReduceMotion
+            ? SplashExperienceTimeline.crossfadePause * 0.55
+            : SplashExperienceTimeline.crossfadePause
+        try await Task.sleep(for: .seconds(pause))
+        guard !hasFinishedSplash else { return }
         phase = next
         withAnimation(crossfadeAnimation) {
             copyOpacity = 1
         }
-        try? await Task.sleep(for: .seconds(SplashTimeline.beat))
+        try await Task.sleep(for: .seconds(SplashExperienceTimeline.beat))
     }
 
-    private func skipSplash() {
-        guard !exitStarted else { return }
-        sequenceTask?.cancel()
-        sequenceTask = nil
-        Task { @MainActor in await completeSplash() }
-    }
+    /// Single exit path: automatic completion, tap-to-skip, failsafe, and stalled-sequence recovery.
+    private func finishSplash(immediate: Bool) {
+        guard SplashFinishGate.attemptFinish(alreadyFinished: &hasFinishedSplash) else { return }
 
-    private func completeSplash() async {
-        guard !exitStarted else { return }
-        exitStarted = true
+        cancelSplashTasks()
         HapticService.lightImpact()
         SplashExperienceStorage.markPresented()
+
+        if immediate {
+            isExiting = false
+            onFinish()
+            return
+        }
+
         withAnimation(exitAnimation) {
             isExiting = true
         }
-        try? await Task.sleep(for: .milliseconds(accessibilityReduceMotion ? 200 : 420))
-        guard !Task.isCancelled else { return }
-        onFinish()
+
+        let fade = accessibilityReduceMotion
+            ? SplashExperienceTimeline.exitFadeReducedMotion
+            : SplashExperienceTimeline.exitFade
+
+        exitTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: .seconds(fade))
+            } catch {
+                return
+            }
+            guard hasFinishedSplash else { return }
+            onFinish()
+        }
+    }
+
+    private func armFailsafeTimeout() {
+        failsafeTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: .seconds(SplashExperienceTimeline.maximumDuration))
+            } catch {
+                return
+            }
+            finishSplash(immediate: true)
+        }
+    }
+
+    private func cancelSplashTasks() {
+        sequenceTask?.cancel()
+        sequenceTask = nil
+        exitTask?.cancel()
+        exitTask = nil
+        failsafeTask?.cancel()
+        failsafeTask = nil
     }
 
     // MARK: - Fonts & motion
@@ -305,8 +361,4 @@ struct SplashExperienceView: View {
             ? .easeInOut(duration: 0.22)
             : .easeInOut(duration: 0.45)
     }
-}
-
-private enum SplashTimeline {
-    static let beat: TimeInterval = 1.05
 }
