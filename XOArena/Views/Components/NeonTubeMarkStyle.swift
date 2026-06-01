@@ -13,48 +13,48 @@ enum NeonMarkEmphasis: Sendable, Equatable {
 
     var tightGlowRadius: CGFloat {
         switch self {
-        case .standard: return 6
-        case .placementPulse: return 7
-        case .winning: return 8
+        case .standard: return 5
+        case .placementPulse: return 6
+        case .winning: return 7
         }
     }
 
     var ambientGlowRadius: CGFloat {
         switch self {
-        case .standard: return 20
-        case .placementPulse: return 24
-        case .winning: return 28
+        case .standard: return 16
+        case .placementPulse: return 19
+        case .winning: return 22
         }
     }
 
     var strokeBoost: CGFloat {
         switch self {
-        case .standard: return 1.2
-        case .placementPulse: return 1.24
-        case .winning: return 1.28
+        case .standard: return 1.14
+        case .placementPulse: return 1.18
+        case .winning: return 1.22
         }
     }
 
     var tightGlowOpacity: Double {
         switch self {
-        case .standard: return 0.92
-        case .placementPulse: return 0.98
-        case .winning: return 1
+        case .standard: return 0.78
+        case .placementPulse: return 0.86
+        case .winning: return 0.92
         }
     }
 
     var ambientGlowOpacity: Double {
         switch self {
-        case .standard: return 0.58
-        case .placementPulse: return 0.68
-        case .winning: return 0.78
+        case .standard: return 0.46
+        case .placementPulse: return 0.54
+        case .winning: return 0.62
         }
     }
 }
 
 enum NeonTubeMarkStyle {
-    /// ~20% wider strokes vs paper themes for tube legibility.
-    static let neonStrokeBoost: CGFloat = 1.2
+    /// Slightly wider strokes vs paper themes; kept below grid dominance.
+    static let neonStrokeBoost: CGFloat = 1.12
 
     static func glowColors(for mark: Mark) -> (tight: Color, ambient: Color) {
         switch mark {

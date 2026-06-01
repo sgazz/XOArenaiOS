@@ -384,7 +384,16 @@ struct GameView: View {
 
     // MARK: - Minimal hero (samo vidljivi timer; hod samo u accessibility)
 
+    @ViewBuilder
     private func gameInformationHeader(metrics: GameLayoutMetrics) -> some View {
+        if viewModel.isNoTimeLocalDuel {
+            classicDuelInformationHeader(metrics: metrics)
+        } else {
+            timedMatchClockHeader(metrics: metrics)
+        }
+    }
+
+    private func timedMatchClockHeader(metrics: GameLayoutMetrics) -> some View {
         let base = metrics.heroTimerFontSize
         let activeFont = Font.system(size: base, design: .rounded).weight(.semibold)
         let inactiveFont = Font.system(size: base * 0.88, design: .rounded).weight(.medium)
@@ -440,6 +449,35 @@ struct GameView: View {
         }
     }
 
+    private func classicDuelInformationHeader(metrics: GameLayoutMetrics) -> some View {
+        let base = metrics.heroTimerFontSize
+        let titleFont = Font.system(size: base * 0.72, design: .rounded).weight(.semibold)
+        let subtitleFont = Font.system(size: base * 0.42, design: .rounded).weight(.medium)
+        let turnFont = Font.system(size: base * 0.52, design: .rounded).weight(.medium)
+
+        return VStack(spacing: 4) {
+            Text("Classic Duel")
+                .font(titleFont)
+                .foregroundStyle(t.textPrimary)
+                .sgEngravedText(intensity: .high, color: t.textPrimary)
+            Text("No Time")
+                .font(subtitleFont)
+                .foregroundStyle(t.textSecondary.opacity(0.72))
+            Text(heroTurnLine)
+                .font(turnFont)
+                .foregroundStyle(t.textPrimary.opacity(0.58))
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Classic duel, no time. \(heroTurnLine)")
+        .accessibilityActions {
+            Button("Reset game") {
+                viewModel.resetGame()
+            }
+        }
+    }
+
     private func heroClockInk(for mark: Mark) -> Color {
         guard mark == .x || mark == .o else { return t.textPrimary.opacity(0.5) }
         let secs = mark == .x ? viewModel.xRemainingSeconds : viewModel.oRemainingSeconds
@@ -480,6 +518,16 @@ struct GameView: View {
 
     /// VoiceOver: hod, vreme, AI težina; reset / težina i dalje preko akcija.
     private var heroAccessibilitySummary: String {
+        if viewModel.isNoTimeLocalDuel {
+            var parts = ["Classic duel, no time", heroTurnLine]
+            if viewModel.gameMode == .localDuel {
+                parts.append("Two players")
+            }
+            if !viewModel.isSessionComplete {
+                parts.append("Actions: reset game")
+            }
+            return parts.joined(separator: ". ")
+        }
         var parts: [String] = [
             heroTurnLine,
             "X \(viewModel.formattedXRemainingTime), O \(viewModel.formattedORemainingTime)"
@@ -534,7 +582,7 @@ struct GameView: View {
         VStack(spacing: metrics.hudClusterSpacing) {
             gameInformationHeader(metrics: metrics)
                 .overlay(alignment: .bottom) {
-                    if let reward = viewModel.latestTimeReward {
+                    if !viewModel.isNoTimeLocalDuel, let reward = viewModel.latestTimeReward {
                         GameClockTimeRewardLine(
                             event: reward,
                             announcement: viewModel.timeRewardAnnouncementID,

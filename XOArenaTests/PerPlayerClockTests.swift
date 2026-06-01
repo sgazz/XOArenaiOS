@@ -69,6 +69,41 @@ final class PerPlayerClockTests: XCTestCase {
         XCTAssertLessThan(vm.xRemainingSeconds, xBefore)
     }
 
+    func test_local_duel_thirty_seconds_starts_both_banks_at_30() throws {
+        let timer = MockGameTimerService()
+        let vm = makeVM(timer: timer)
+        vm.startNewGame(mode: .localDuel, duration: .thirtySeconds)
+        XCTAssertEqual(vm.xRemainingSeconds, 30)
+        XCTAssertEqual(vm.oRemainingSeconds, 30)
+    }
+
+    func test_local_duel_board_win_applies_pvp_economy_through_view_model() throws {
+        let timer = MockGameTimerService()
+        var s = GameEngine.makeInitialSession(mode: .localDuel)
+        s.boards[0] = TestBoardFixture.board(
+            with: [
+                .x, .x, .empty,
+                .o, .empty, .o,
+                .empty, .empty, .empty
+            ],
+            phase: .firstMove
+        )
+        s.boards[0].startingMark = .x
+        s.activeBoardIndex = 0
+
+        let vm = makeVM(timer: timer, session: s)
+        let base = GameDuration.threeMinutes.seconds
+        XCTAssertEqual(vm.xRemainingSeconds, base)
+        XCTAssertEqual(vm.oRemainingSeconds, base)
+
+        vm.onGameViewAppear()
+        vm.makeMove(boardIndex: 0, cellIndex: 2)
+
+        XCTAssertEqual(vm.stats.xBoardWins, 1)
+        XCTAssertEqual(vm.xRemainingSeconds, base + 6)
+        XCTAssertEqual(vm.oRemainingSeconds, base - 4)
+    }
+
     func test_draw_bonus_adds_two_to_each_bank_in_local_duel() throws {
         let timer = MockGameTimerService()
         var s = GameEngine.makeInitialSession(mode: .localDuel)

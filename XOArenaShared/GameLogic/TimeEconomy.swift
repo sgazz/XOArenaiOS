@@ -35,7 +35,7 @@ struct TimeEconomyRules: Equatable, Sendable {
     let draw: DrawShift?
 
     static let pvp = TimeEconomyRules(
-        boardWin: BoardWinShift(winnerGain: 5, loserPenalty: 3),
+        boardWin: BoardWinShift(winnerGain: 6, loserPenalty: 4),
         draw: .both(2)
     )
 
@@ -65,8 +65,19 @@ struct TimeEconomyRules: Equatable, Sendable {
 enum TimeEconomyPolicy: Sendable {
     /// Reward penalties never push a bank below this value.
     static let penaltyFloorSeconds = 3
-    /// Bonus seconds cannot exceed **`initialDuration + bonusCapOverInitialSeconds`**.
-    static let bonusCapOverInitialSeconds = 15
+    /// Default bonus cap (PvAI and other modes).
+    static let defaultBonusCapOverInitialSeconds = 15
+    /// PvP (`localDuel`) allows more time accumulation from board wins.
+    static let pvpBonusCapOverInitialSeconds = 25
+
+    static func bonusCapOverInitial(for mode: GameMode) -> Int {
+        switch mode {
+        case .localDuel:
+            return pvpBonusCapOverInitialSeconds
+        case .vsAI, .learning, .soloFocus, .aiVsAI:
+            return defaultBonusCapOverInitialSeconds
+        }
+    }
 }
 
 enum BoardTimeOutcome: Equatable, Sendable {
@@ -158,9 +169,10 @@ enum TimeEconomyEngine {
         _ adjustment: TimeEconomyAdjustment,
         xRemaining: inout Int,
         oRemaining: inout Int,
-        initialDurationSeconds: Int
+        initialDurationSeconds: Int,
+        gameMode: GameMode
     ) -> TimeEconomyAdjustment {
-        let cap = initialDurationSeconds + TimeEconomyPolicy.bonusCapOverInitialSeconds
+        let cap = initialDurationSeconds + TimeEconomyPolicy.bonusCapOverInitial(for: gameMode)
         let floor = TimeEconomyPolicy.penaltyFloorSeconds
 
         let newX = clampBank(

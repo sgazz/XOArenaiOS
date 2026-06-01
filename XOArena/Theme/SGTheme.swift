@@ -25,10 +25,17 @@ enum SGThemeMode: String, CaseIterable, Hashable, Sendable {
     var usesLightPaper: Bool { self == .light }
     var isNeonPulse: Bool { self == .neonPulse }
 
-    func nextSelectable() -> SGThemeMode {
-        let all = Self.allCases
-        guard let i = all.firstIndex(of: self) else { return .light }
-        return all[(i + 1) % all.count]
+    /// Appearance toggle exposes only these (Neon Pulse remains in code, hidden for now).
+    static let userFacing: [SGThemeMode] = [.light, .dark]
+
+    var isUserFacing: Bool { Self.userFacing.contains(self) }
+
+    func nextUserFacing() -> SGThemeMode {
+        switch self {
+        case .light: return .dark
+        case .dark: return .light
+        case .neonPulse: return .light
+        }
     }
 }
 
@@ -43,13 +50,13 @@ extension EnvironmentValues {
     }
 }
 
-/// Default light; cycles **Light → Dark → Neon Pulse**. Wired from `ContentView`.
+/// Default light; user toggle cycles **Light ↔ Dark** only. Wired from `ContentView`.
 @MainActor
 final class SGThemeManager: ObservableObject {
     @Published var mode: SGThemeMode = .light
 
     func cycleTheme() {
-        mode = mode.nextSelectable()
+        mode = mode.nextUserFacing()
     }
 }
 
@@ -89,6 +96,6 @@ struct SGThemeToggleControl: View {
         }
         .buttonStyle(ToolbarThemeIconPressStyle())
         .accessibilityLabel("Theme: \(themeManager.mode.displayName)")
-        .accessibilityHint("Prebacuje između Light, Dark i Neon Pulse.")
+        .accessibilityHint("Prebacuje između Light i Dark.")
     }
 }

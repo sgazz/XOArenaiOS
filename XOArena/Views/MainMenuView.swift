@@ -15,7 +15,7 @@ private enum MainMenuPlayFocus: Equatable {
 
 private enum MainMenuDurationOptions {
     static let pvAI: [GameDuration] = [.thirtySeconds, .oneMinute, .threeMinutes, .fiveMinutes]
-    static let pvp: [GameDuration] = [.oneMinute, .threeMinutes, .fiveMinutes]
+    static let pvp: [GameDuration] = [.noTime, .thirtySeconds, .oneMinute, .threeMinutes, .fiveMinutes]
 }
 
 private struct MainMenuLayoutMetrics: Sendable {
@@ -449,7 +449,7 @@ struct MainMenuView: View {
                 Button {
                     selectedDuration = duration
                 } label: {
-                    Text(duration.title)
+                    Text(duration.pickerTitle)
                         .lineLimit(1)
                         .minimumScaleFactor(0.72)
                 }

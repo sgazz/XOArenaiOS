@@ -73,7 +73,7 @@ enum XOTheme {
                 surfaceMuted: SGColors.neonGraphite.opacity(0.92),
                 textPrimary: SGColors.neonTextPrimary,
                 textSecondary: SGColors.neonTextSecondary,
-                gridLine: SGColors.neonCyanSoft,
+                gridLine: SGColors.neonCyanGrid,
                 accent: SGColors.neonAccent,
                 accentSubtle: SGColors.neonAccentSubtle,
                 border: SGColors.neonBorder,

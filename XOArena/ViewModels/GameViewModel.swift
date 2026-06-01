@@ -115,6 +115,14 @@ final class GameViewModel {
 
     var formattedORemainingTime: String { Self.formatClockDigits(oRemainingSeconds) }
 
+    /// **No Time** PvP (`localDuel`): classic board-count duel, no per-player clocks or time economy.
+    var isNoTimeLocalDuel: Bool {
+        session.gameMode == .localDuel && selectedDuration == .noTime
+    }
+
+    /// Per-player match clocks (timed survival). Off for **No Time** `localDuel` only.
+    private var matchClockRuns: Bool { !isNoTimeLocalDuel }
+
     private static func formatClockDigits(_ seconds: Int) -> String {
         let bounded = max(seconds, 0)
         let mins = bounded / 60
@@ -132,6 +140,7 @@ final class GameViewModel {
     }
 
     private func applyBoardTimeEconomy(from before: GameSession, to after: GameSession) {
+        guard matchClockRuns else { return }
         guard let outcome = TimeEconomyEngine.boardOutcome(before: before.stats, after: after.stats) else { return }
         let aiTier = effectiveAIDifficultyForRewards(in: after)
         guard let rules = TimeEconomyEngine.rules(for: after.gameMode, aiDifficulty: aiTier) else { return }
@@ -146,7 +155,8 @@ final class GameViewModel {
             planned,
             xRemaining: &xRemainingSeconds,
             oRemaining: &oRemainingSeconds,
-            initialDurationSeconds: selectedDuration.seconds
+            initialDurationSeconds: selectedDuration.seconds,
+            gameMode: after.gameMode
         )
         guard !applied.isEmpty else { return }
 
@@ -209,9 +219,11 @@ final class GameViewModel {
     /// Zaustavlja sat, opciono dodeljuje bonus nerešenom mini‑krugu, ponovo pokreće sat za **`currentMark`**.
     /// **`movedBoardIndex`**: tabla na kojoj je **`applyMove`** izvršen (za **`GAMEPLAY_DRAW`**, ne aktivna posle **`GameEngine`**).
     private func resyncClocksAfterMove(from before: GameSession, to after: GameSession, movedBoardIndex: Int? = nil) {
-        snapOutgoingClockFromDeadlineBeforeStopping()
-        stopTimer()
-        applyBoardTimeEconomy(from: before, to: after)
+        if matchClockRuns {
+            snapOutgoingClockFromDeadlineBeforeStopping()
+            stopTimer()
+            applyBoardTimeEconomy(from: before, to: after)
+        }
 #if DEBUG
         if after.stats.boardDraws > before.stats.boardDraws {
             let drawBoard = movedBoardIndex ?? before.activeBoardIndex
@@ -222,7 +234,26 @@ final class GameViewModel {
             )
         }
 #endif
+        completeForClassicDuelBoardQuotaIfNeeded()
         startTimerIfNeeded()
+    }
+
+    private func completeForClassicDuelBoardQuotaIfNeeded() {
+        guard isNoTimeLocalDuel else { return }
+        guard session.sessionState == .playing else { return }
+        guard let reason = ClassicDuelCompletion.completionReason(for: session.stats) else { return }
+
+        cancelAIPipeline(debugLogCancel: false)
+        completionReason = reason
+        var next = session
+        next.sessionState = .completed
+        HapticService.heavyImpact()
+        SoundService.shared.playCompletion()
+        session = next
+        stopTimer()
+#if DEBUG
+        GameDebugLogger.sessionCompleted(reason: reason.subtitle)
+#endif
     }
 
     private func presentBoardWinTimeRewardFeedback(_ event: TimeRewardEvent) {
@@ -557,8 +588,10 @@ final class GameViewModel {
         }
         guard let next = GameEngine.advanceFocus(session) else { return }
         session = next
-        snapOutgoingClockFromDeadlineBeforeStopping()
-        stopTimer()
+        if matchClockRuns {
+            snapOutgoingClockFromDeadlineBeforeStopping()
+            stopTimer()
+        }
         startTimerIfNeeded()
 #if DEBUG
         GameDebugLogger.snapshot(session: session, formattedTime: formattedRemainingTime)
@@ -631,6 +664,10 @@ final class GameViewModel {
     private func startTimerIfNeeded() {
         guard !isPaused else { return }
         guard session.sessionState == .playing else { return }
+        guard matchClockRuns else {
+            scheduleAIIfNeeded()
+            return
+        }
         let mark = currentMark
         guard mark == .x || mark == .o else { return }
 
@@ -778,6 +815,7 @@ final class GameViewModel {
     }
 
     private func completeForTimeExpiryIfNeeded(finishedMark: Mark? = nil) {
+        guard matchClockRuns else { return }
         guard !isPaused else { return }
         guard session.sessionState == .playing else {
             stopTimer()

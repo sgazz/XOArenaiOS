@@ -12,6 +12,11 @@ enum CompletionReason: Equatable, Sendable {
     case xTimedOut
     /// Igrač **O** je ostao bez vremena → **X** pobeduje na vreme.
     case oTimedOut
+    /// **No Time** PvP: više pobeda na tablama.
+    case xWinsOnBoardCount
+    case oWinsOnBoardCount
+    /// **No Time** PvP: jednak broj pobeda na tablama.
+    case drawOnBoardCount
 
     var subtitle: String {
         switch self {
@@ -21,6 +26,12 @@ enum CompletionReason: Equatable, Sendable {
             return "O wins on time"
         case .oTimedOut:
             return "X wins on time"
+        case .xWinsOnBoardCount:
+            return "X wins the duel"
+        case .oWinsOnBoardCount:
+            return "O wins the duel"
+        case .drawOnBoardCount:
+            return "Draw on boards"
         }
     }
 }

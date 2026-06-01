@@ -14,46 +14,68 @@ struct AnimatedBoardPreview: View {
     @State private var revealedBoardCount = 0
     @State private var activeBoardIndex = 0
     @State private var winFlashPhase: CGFloat = 0
-    @State private var displayedScore = 0
+    @State private var showTimeReward = false
     @State private var showParticles = false
     @State private var rotationTask: Task<Void, Never>?
+
+    @State private var youClockSeconds = 12
+    @State private var opponentClockSeconds = 28
+    @State private var youClockExpired = false
+    @State private var clockTask: Task<Void, Never>?
 
     private var t: XOTheme.Tokens { XOTheme.tokens(for: themeMode) }
 
     var body: some View {
         GeometryReader { geo in
-            let layout = OnboardingArenaLayout.resolve(in: geo.size)
-            VStack(spacing: layout.rowGap) {
-                ForEach(0 ..< 2, id: \.self) { row in
-                    HStack(spacing: layout.columnGap) {
-                        ForEach(0 ..< 4, id: \.self) { col in
-                            let index = row * 4 + col
-                            miniBoard(
-                                index: index,
-                                side: layout.boardSide,
-                                layout: layout
-                            )
-                        }
-                    }
-                }
-
-                if kind == .winAndScore {
-                    scoreBadge
-                        .padding(.top, SGSpacing.sm)
-                }
+            switch kind {
+            case .clockSurvival:
+                clockSurvivalVisual
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            default:
+                arenaGrid(in: geo.size)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onAppear { restartAnimations() }
-        .onDisappear { rotationTask?.cancel() }
+        .onDisappear {
+            rotationTask?.cancel()
+            clockTask?.cancel()
+        }
         .onChange(of: kind) { _, _ in restartAnimations() }
+    }
+
+    @ViewBuilder
+    private func arenaGrid(in size: CGSize) -> some View {
+        let layout = OnboardingArenaLayout.resolve(in: size)
+        VStack(spacing: layout.rowGap) {
+            ForEach(0 ..< 2, id: \.self) { row in
+                HStack(spacing: layout.columnGap) {
+                    ForEach(0 ..< 4, id: \.self) { col in
+                        let index = row * 4 + col
+                        miniBoard(
+                            index: index,
+                            side: layout.boardSide,
+                            layout: layout
+                        )
+                    }
+                }
+            }
+
+            if kind == .timeEconomy {
+                timeRewardBadge
+                    .padding(.top, SGSpacing.sm)
+                    .opacity(showTimeReward ? 1 : 0)
+                    .offset(y: showTimeReward ? 0 : 6)
+                    .animation(.spring(response: 0.48, dampingFraction: 0.76), value: showTimeReward)
+            }
+        }
     }
 
     @ViewBuilder
     private func miniBoard(index: Int, side: CGFloat, layout: OnboardingArenaLayout) -> some View {
         let visible = boardVisible(index: index)
         let highlighted = kind == .activeBoardRotation && activeBoardIndex == index
-        let winBoard = kind == .winAndScore && index == 0
+        let winBoard = kind == .timeEconomy && index == 0
 
         OnboardingMiniBoardTile(
             boardSide: side,
@@ -74,18 +96,23 @@ struct AnimatedBoardPreview: View {
         }
     }
 
-    private var scoreBadge: some View {
-        HStack(spacing: SGSpacing.sm) {
-            Text("You")
-                .font(SGTypography.sectionTitle)
-                .foregroundStyle(t.textSecondary)
-            Text("\(displayedScore)")
-                .font(.system(size: 28, weight: .semibold, design: .rounded))
-                .foregroundStyle(t.textPrimary)
-                .contentTransition(.numericText())
-                .animation(.spring(response: 0.45, dampingFraction: 0.72), value: displayedScore)
+    private var timeRewardBadge: some View {
+        HStack(spacing: SGSpacing.md) {
+            timeShiftPill(label: "You", delta: "+8s", isGain: true)
+            timeShiftPill(label: "Opponent", delta: "−4s", isGain: false)
         }
-        .padding(.horizontal, SGSpacing.lg)
+    }
+
+    private func timeShiftPill(label: String, delta: String, isGain: Bool) -> some View {
+        VStack(spacing: SGSpacing.xs) {
+            Text(label)
+                .font(SGTypography.small)
+                .foregroundStyle(t.textSecondary)
+            Text(delta)
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .foregroundStyle(isGain ? t.accent : t.textPrimary.opacity(0.88))
+        }
+        .padding(.horizontal, SGSpacing.md)
         .padding(.vertical, SGSpacing.sm)
         .background(
             RoundedRectangle(cornerRadius: SGRadius.md, style: .continuous)
@@ -97,12 +124,90 @@ struct AnimatedBoardPreview: View {
         )
     }
 
+    private var clockSurvivalVisual: some View {
+        VStack(spacing: SGSpacing.lg) {
+            HStack(spacing: SGSpacing.lg) {
+                onboardingClockColumn(
+                    label: "You",
+                    seconds: youClockSeconds,
+                    isExpired: youClockExpired,
+                    isWinner: false
+                )
+                onboardingClockColumn(
+                    label: "Opponent",
+                    seconds: opponentClockSeconds,
+                    isExpired: false,
+                    isWinner: youClockExpired
+                )
+            }
+
+            if youClockExpired {
+                Text("Time decides the match.")
+                    .font(SGTypography.small)
+                    .foregroundStyle(t.textSecondary)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+        }
+        .animation(.easeInOut(duration: 0.32), value: youClockExpired)
+    }
+
+    private func onboardingClockColumn(
+        label: String,
+        seconds: Int,
+        isExpired: Bool,
+        isWinner: Bool
+    ) -> some View {
+        VStack(spacing: SGSpacing.sm) {
+            Text(label)
+                .font(SGTypography.sectionTitle)
+                .foregroundStyle(t.textSecondary)
+
+            Text(formatClock(seconds))
+                .font(.system(size: 34, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(isExpired ? t.textSecondary.opacity(0.45) : t.textPrimary)
+                .contentTransition(.numericText())
+                .animation(.easeInOut(duration: 0.22), value: seconds)
+
+            if isExpired {
+                Text("Out of time")
+                    .font(SGTypography.small)
+                    .foregroundStyle(Color.red.opacity(0.82))
+            } else if isWinner {
+                Text("Survives")
+                    .font(SGTypography.small)
+                    .foregroundStyle(t.accent)
+            }
+        }
+        .frame(minWidth: 120)
+        .padding(.horizontal, SGSpacing.md)
+        .padding(.vertical, SGSpacing.lg)
+        .background(
+            RoundedRectangle(cornerRadius: SGRadius.lg, style: .continuous)
+                .fill(t.surface.opacity(themeMode == .light ? 0.92 : 0.55))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: SGRadius.lg, style: .continuous)
+                .strokeBorder(
+                    isWinner ? t.accent.opacity(0.55) : t.border.opacity(0.45),
+                    lineWidth: isWinner ? 1.5 : 1
+                )
+        )
+    }
+
+    private func formatClock(_ seconds: Int) -> String {
+        let bounded = max(0, seconds)
+        return String(format: "%d:%02d", bounded / 60, bounded % 60)
+    }
+
     private func boardVisible(index: Int) -> Bool {
         switch kind {
         case .eightBoardReveal:
             return index < revealedBoardCount
-        case .activeBoardRotation, .winAndScore:
+        case .activeBoardRotation, .timeEconomy:
             return true
+        case .clockSurvival:
+            return false
         }
     }
 
@@ -115,11 +220,13 @@ struct AnimatedBoardPreview: View {
                 return samplePartialMarks(for: index)
             }
             return Array(repeating: .empty, count: GameConstants.cellCount)
-        case .winAndScore:
+        case .timeEconomy:
             if index == 0 {
                 return winningBoardMarks
             }
             return samplePartialMarks(for: index)
+        case .clockSurvival:
+            return Array(repeating: .empty, count: GameConstants.cellCount)
         }
     }
 
@@ -152,19 +259,25 @@ struct AnimatedBoardPreview: View {
 
     private func restartAnimations() {
         rotationTask?.cancel()
+        clockTask?.cancel()
         revealedBoardCount = 0
         activeBoardIndex = 0
         winFlashPhase = 0
-        displayedScore = 0
+        showTimeReward = false
         showParticles = false
+        youClockSeconds = 12
+        opponentClockSeconds = 28
+        youClockExpired = false
 
         switch kind {
         case .eightBoardReveal:
             runStaggerReveal()
         case .activeBoardRotation:
             runActiveRotation()
-        case .winAndScore:
-            runWinSequence()
+        case .timeEconomy:
+            runTimeEconomySequence()
+        case .clockSurvival:
+            runClockSurvivalSequence()
         }
     }
 
@@ -184,13 +297,13 @@ struct AnimatedBoardPreview: View {
                 try? await Task.sleep(for: .milliseconds(850))
                 guard !Task.isCancelled else { break }
                 withAnimation(.easeInOut(duration: 0.38)) {
-                    activeBoardIndex = (activeBoardIndex + 1) % 4
+                    activeBoardIndex = (activeBoardIndex + 1) % GameConstants.boardCount
                 }
             }
         }
     }
 
-    private func runWinSequence() {
+    private func runTimeEconomySequence() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
             withAnimation(.easeInOut(duration: 0.28)) {
                 winFlashPhase = 1
@@ -198,8 +311,23 @@ struct AnimatedBoardPreview: View {
             showParticles = true
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.95) {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.72)) {
-                displayedScore = 1
+            showTimeReward = true
+        }
+    }
+
+    private func runClockSurvivalSequence() {
+        clockTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(600))
+            while !Task.isCancelled, youClockSeconds > 0 {
+                try? await Task.sleep(for: .milliseconds(420))
+                guard !Task.isCancelled else { break }
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    youClockSeconds -= 1
+                }
+            }
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.28)) {
+                youClockExpired = true
             }
         }
     }

@@ -118,7 +118,7 @@ struct CompactBoardGrid: View {
         case .dark:
             return Color.white.opacity(0.38)
         case .neonPulse:
-            return SGColors.neonCyanGrid.opacity(0.65)
+            return SGColors.neonCyanGridCore.opacity(0.88)
         }
     }
 

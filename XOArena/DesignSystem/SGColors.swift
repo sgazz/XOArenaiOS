@@ -63,8 +63,15 @@ enum SGColors {
     /// Vivid tube cyan — board symbols (O).
     static let neonCyan = Color(hex: 0x27E8FF)
     static let neonCyanSoft = Color(hex: 0x27E8FF).opacity(0.52)
-    /// Dimmer grid lines — always below symbol brightness.
-    static let neonCyanGrid = Color(hex: 0x27E8FF).opacity(0.34)
+    /// Mini-board grid — readable, still below symbol glow.
+    static let neonCyanGrid = Color(hex: 0x32F0FF).opacity(0.56)
+    /// Brighter grid stroke core (Neon mini boards).
+    static let neonCyanGridCore = Color(hex: 0x42F8FF).opacity(0.82)
+    /// Soft halo for grid line shadows.
+    static let neonCyanGridGlow = Color(hex: 0x27E8FF).opacity(0.42)
+    /// Translucent playfield card behind each mini board (Neon only).
+    static let neonBoardCardFill = Color(hex: 0x050608).opacity(0.42)
+    static let neonBoardCardBorder = Color(hex: 0x27E8FF).opacity(0.24)
     /// Vivid tube magenta — board symbols (X).
     static let neonMagenta = Color(hex: 0xFF2FAE)
     static let neonMagentaSoft = Color(hex: 0xFF2FAE).opacity(0.5)

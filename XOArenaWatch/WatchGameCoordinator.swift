@@ -272,7 +272,7 @@ final class WatchGameCoordinator: ObservableObject {
         )
     }
 
-    nonisolated private static func setupDumpLabel(_ duration: GameDuration) -> String {
+    private static func setupDumpLabel(_ duration: GameDuration) -> String {
         "\(duration.title) (raw \(duration.rawValue))"
     }
 

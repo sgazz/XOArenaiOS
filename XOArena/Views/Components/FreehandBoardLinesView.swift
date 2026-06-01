@@ -80,18 +80,28 @@ struct FreehandBoardLinesView: View {
     }
 
     private func neonPulseBoard() -> some View {
-        let line = SGColors.neonCyanGrid
-        let accentMul: CGFloat = accent ? 1.12 : 1
-        let baseOpacity = accent ? 0.48 : 0.26
+        let line = SGColors.neonCyanGridCore
+        let halo = SGColors.neonCyanGridGlow
+        let accentMul: CGFloat = accent ? 1.14 : 1
+        let baseOpacity = accent ? 0.78 : 0.58
         return ZStack {
             ForEach(BoardGridSlot.allCases, id: \.rawValue) { slot in
                 let v = GridLineVariation.forSlot(boardIndex: boardIndex, slot: slot)
-                let coreW = (accent ? 0.92 : 0.72) * v.strokeWidthMultiplier * accentMul
+                let coreW = (accent ? 1.08 : 0.92) * v.strokeWidthMultiplier * accentMul
+                let glowW = (accent ? 1.95 : 1.55) * v.strokeWidthMultiplier * accentMul
                 VariFreehandBoardLine(boardIndex: boardIndex, slot: slot)
-                    .stroke(line.opacity(Double(baseOpacity * 0.42 * v.opacityMultiplier * accentMul)), style: StrokeStyle(lineWidth: (accent ? 1.6 : 1.2) * v.strokeWidthMultiplier, lineCap: .round, lineJoin: .round))
-                    .shadow(color: SGColors.neonCyanSoft.opacity(accent ? 0.28 : 0.14), radius: accent ? 2.5 : 1.5)
+                    .stroke(
+                        line.opacity(Double(baseOpacity * 0.38 * v.opacityMultiplier * accentMul)),
+                        style: StrokeStyle(lineWidth: glowW, lineCap: .round, lineJoin: .round)
+                    )
+                    .shadow(color: halo.opacity(accent ? 0.48 : 0.34), radius: accent ? 4 : 3)
+                    .shadow(color: SGColors.neonCyanSoft.opacity(accent ? 0.26 : 0.18), radius: accent ? 6 : 4)
                 VariFreehandBoardLine(boardIndex: boardIndex, slot: slot)
-                    .stroke(line.opacity(Double(baseOpacity * v.opacityMultiplier * accentMul)), style: StrokeStyle(lineWidth: coreW, lineCap: .round, lineJoin: .round))
+                    .stroke(
+                        line.opacity(Double(baseOpacity * v.opacityMultiplier * accentMul)),
+                        style: StrokeStyle(lineWidth: coreW, lineCap: .round, lineJoin: .round)
+                    )
+                    .shadow(color: halo.opacity(accent ? 0.4 : 0.28), radius: accent ? 2.2 : 1.6)
             }
         }
     }

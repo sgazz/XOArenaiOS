@@ -31,4 +31,12 @@ enum GameDuration: Int, CaseIterable, Equatable, Sendable {
         case .noTime: return "∞"
         }
     }
+
+    /// Duration picker label (PvP uses explicit **No Time** instead of ∞).
+    var pickerTitle: String {
+        switch self {
+        case .noTime: return "No Time"
+        default: return title
+        }
+    }
 }

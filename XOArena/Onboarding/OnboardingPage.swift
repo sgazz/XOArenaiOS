@@ -47,6 +47,13 @@ struct OnboardingPage: View {
     }
 
     private var onboardingVisualHeight: CGFloat {
-        UIDevice.current.userInterfaceIdiom == .pad ? 260 : 210
+        let base: CGFloat = UIDevice.current.userInterfaceIdiom == .pad ? 260 : 210
+        if model.visual == .clockSurvival {
+            return UIDevice.current.userInterfaceIdiom == .pad ? 220 : 190
+        }
+        if model.visual == .timeEconomy {
+            return base + (UIDevice.current.userInterfaceIdiom == .pad ? 36 : 28)
+        }
+        return base
     }
 }
