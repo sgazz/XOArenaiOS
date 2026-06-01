@@ -293,7 +293,7 @@ struct MainMenuView: View {
                         matchSetupCard(
                             metrics: metrics,
                             footerFonts: footerFonts,
-                            maxWidth: min(geo.size.width - SGSpacing.xl * 2, 400)
+                            maxWidth: Self.resolvedMatchSetupCardMaxWidth(containerWidth: geo.size.width)
                         )
                     }
                     .padding(.horizontal, SGSpacing.lg)
@@ -374,11 +374,21 @@ struct MainMenuView: View {
         .accessibilityLabel("XOArena. Eight boards. One focus.")
     }
 
+    /// Avoids invalid **`frame(maxWidth:)`** when **`GeometryReader`** reports zero width on first layout pass.
+    private static func resolvedMatchSetupCardMaxWidth(containerWidth: CGFloat) -> CGFloat {
+        guard containerWidth.isFinite, containerWidth > 0 else { return 360 }
+        let inset = SGSpacing.lg * 2
+        let available = containerWidth - inset
+        guard available.isFinite, available > 0 else { return min(360, containerWidth) }
+        return min(max(available, 200), 400)
+    }
+
     private func matchSetupCard(
         metrics: MainMenuLayoutMetrics,
         footerFonts: (selected: Font, unselected: Font),
         maxWidth: CGFloat
     ) -> some View {
+        let safeMaxWidth = maxWidth.isFinite && maxWidth > 0 ? maxWidth : 360
         let t = XOTheme.tokens(for: themeMode)
         let description = MainMenuMatchCopy.description(focus: menuPlayFocus, duration: selectedDuration)
 
@@ -416,7 +426,7 @@ struct MainMenuView: View {
                 .padding(.top, SGSpacing.xs)
         }
         .padding(SGSpacing.lg)
-        .frame(maxWidth: maxWidth)
+        .frame(maxWidth: safeMaxWidth)
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: SGRadius.lg, style: .continuous)
