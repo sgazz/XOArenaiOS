@@ -18,6 +18,32 @@ private enum MainMenuDurationOptions {
     static let pvp: [GameDuration] = [.noTime, .thirtySeconds, .oneMinute, .threeMinutes, .fiveMinutes]
 }
 
+private enum MainMenuMatchCopy {
+    static func description(focus: MainMenuPlayFocus, duration: GameDuration) -> String {
+        switch focus {
+        case .pvAI:
+            return "Challenge the AI across eight active boards."
+        case .pvp:
+            if duration == .noTime {
+                return "Classic duel. No timers. Pure strategy."
+            }
+            return "Fast survival duel. Win boards to gain time."
+        }
+    }
+}
+
+private extension GameDuration {
+    var mainMenuChipLabel: String {
+        switch self {
+        case .thirtySeconds: return "30s"
+        case .oneMinute: return "1m"
+        case .threeMinutes: return "3m"
+        case .fiveMinutes: return "5m"
+        case .noTime: return "No Time"
+        }
+    }
+}
+
 private struct MainMenuLayoutMetrics: Sendable {
     var titleBase: CGFloat
     var subtitleBase: CGFloat
@@ -204,7 +230,9 @@ private enum MenuStoneChrome {
 struct MainMenuView: View {
     @Environment(\.sgThemeMode) private var themeMode
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @EnvironmentObject private var themeManager: SGThemeManager
+    @AppStorage(SplashExperienceStorage.showSettingKey) private var showSplashExperience = false
     @Binding var selectedDuration: GameDuration
     @Binding var aiDifficulty: AIDifficulty
 
@@ -252,41 +280,24 @@ struct MainMenuView: View {
         GeometryReader { geo in
             let metrics = MainMenuLayoutMetrics.resolve(bounds: geo.size, dynamicTypeSize: dynamicTypeSize)
             let footerFonts = menuFootnoteFonts(base: metrics.auxiliaryBase)
-            let nudgeAboveCenter = -geo.size.height * 0.045
             ZStack {
                 MenuStoneChrome.menuBackground(themeMode)
+                MainMenuAmbientBackground()
 
                 VStack(spacing: 0) {
                     Spacer(minLength: 0)
 
-                    VStack(alignment: .leading, spacing: 0) {
+                    VStack(spacing: SGSpacing.xl + SGSpacing.sm) {
                         titleTaglineCluster(metrics: metrics)
 
-                        HStack(alignment: .center, spacing: SGSpacing.md) {
-                            pvaiPrimaryButton(metrics: metrics)
-                                .frame(maxWidth: .infinity)
-                            pvpTextButton(metrics: metrics)
-                                .frame(maxWidth: .infinity)
-                        }
-                        .padding(.top, SGSpacing.xl)
-
-                        if menuPlayFocus == .pvAI {
-                            aiDifficultyPicker(metrics: metrics, selected: footerFonts.selected, unselected: footerFonts.unselected)
-                                .padding(.top, CGFloat(16))
-                        }
-
-                        durationTextPicker(
+                        matchSetupCard(
                             metrics: metrics,
-                            timerSelected: footerFonts.selected,
-                            timerUnselected: footerFonts.unselected
+                            footerFonts: footerFonts,
+                            maxWidth: min(geo.size.width - SGSpacing.xl * 2, 400)
                         )
-                        .padding(.top, menuPlayFocus == .pvAI ? CGFloat(20) : metrics.pvaiToPvpSpacing)
-
-                        startPrimaryButton(metrics: metrics)
-                            .padding(.top, SGSpacing.xl)
                     }
-                    .padding(.horizontal, SGSpacing.xl)
-                    .offset(y: nudgeAboveCenter)
+                    .padding(.horizontal, SGSpacing.lg)
+                    .frame(maxWidth: .infinity)
 
                     Spacer(minLength: 0)
                 }
@@ -298,8 +309,11 @@ struct MainMenuView: View {
                     applyMenuFocusFromBias()
                     syncDurationForSelectedMode()
                 }
+                .onChange(of: menuPlayFocus) { _, _ in
+                    syncDurationForSelectedMode()
+                }
                 .accessibilityElement(children: .contain)
-                .accessibilityHint("Choose PvAI or PvP, set options, then tap Start.")
+                .accessibilityHint("Choose mode and time, then tap Start Match.")
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
@@ -317,13 +331,27 @@ struct MainMenuView: View {
                 .accessibilityHint("Opens the gameplay tutorial.")
             }
             ToolbarItem(placement: .topBarTrailing) {
-                SGThemeToggleControl()
+                HStack(spacing: SGSpacing.sm) {
+                    Menu {
+                        Toggle("Show Splash Experience", isOn: $showSplashExperience)
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.system(size: 17, weight: .medium))
+                            .foregroundStyle(MenuStoneChrome.taglineSoft(themeMode).opacity(0.88))
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("More options")
+                    .accessibilityHint("Includes Show Splash Experience on launch.")
+
+                    SGThemeToggleControl()
+                }
             }
         }
     }
 
     private func titleTaglineCluster(metrics: MainMenuLayoutMetrics) -> some View {
-        VStack(spacing: SGSpacing.xl + SGSpacing.sm) {
+        VStack(spacing: SGSpacing.md) {
             Text("XOArena")
                 .font(menuTitleFont(base: metrics.titleBase))
                 .foregroundStyle(MenuStoneChrome.titleInk(themeMode))
@@ -334,15 +362,84 @@ struct MainMenuView: View {
 
             Text("Eight boards. One focus.")
                 .font(menuSubtitleFont(base: metrics.subtitleBase))
-                .foregroundStyle(MenuStoneChrome.taglineSoft(themeMode).opacity(0.6))
+                .foregroundStyle(MenuStoneChrome.taglineSoft(themeMode).opacity(0.62))
                 .multilineTextAlignment(.center)
                 .minimumScaleFactor(0.78)
                 .lineLimit(3)
                 .tracking(SGTypography.subtitleTracking)
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, SGSpacing.xxl + SGSpacing.sm)
+        .padding(.horizontal, SGSpacing.lg)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("XOArena. Eight boards. One focus.")
+    }
+
+    private func matchSetupCard(
+        metrics: MainMenuLayoutMetrics,
+        footerFonts: (selected: Font, unselected: Font),
+        maxWidth: CGFloat
+    ) -> some View {
+        let t = XOTheme.tokens(for: themeMode)
+        let description = MainMenuMatchCopy.description(focus: menuPlayFocus, duration: selectedDuration)
+
+        return VStack(alignment: .leading, spacing: SGSpacing.lg) {
+            menuSectionLabel("Mode")
+            HStack(spacing: SGSpacing.sm) {
+                modeSelectorButton(title: "PvAI", focus: .pvAI, metrics: metrics)
+                modeSelectorButton(title: "PvP", focus: .pvp, metrics: metrics)
+            }
+
+            if menuPlayFocus == .pvAI {
+                menuSectionLabel("AI Difficulty")
+                    .padding(.top, SGSpacing.xs)
+                aiDifficultyPicker(
+                    metrics: metrics,
+                    selected: footerFonts.selected,
+                    unselected: footerFonts.unselected
+                )
+            }
+
+            timeControlSection(metrics: metrics)
+                .padding(.top, menuPlayFocus == .pvAI ? SGSpacing.sm : 0)
+
+            Text(description)
+                .font(.system(size: metrics.auxiliaryBase + 0.5, weight: .regular, design: .rounded))
+                .foregroundStyle(MenuStoneChrome.taglineSoft(themeMode).opacity(0.82))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .fixedSize(horizontal: false, vertical: true)
+                .lineSpacing(2)
+                .accessibilityLabel("Match description")
+                .accessibilityValue(description)
+
+            startPrimaryButton(metrics: metrics)
+                .padding(.top, SGSpacing.xs)
+        }
+        .padding(SGSpacing.lg)
+        .frame(maxWidth: maxWidth)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: SGRadius.lg, style: .continuous)
+                .fill(t.surface.opacity(themeMode == .light ? 0.58 : 0.22))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: SGRadius.lg, style: .continuous)
+                .strokeBorder(t.border.opacity(themeMode == .light ? 0.35 : 0.42), lineWidth: 1)
+        )
+        .shadow(
+            color: Color.black.opacity(themeMode == .light ? 0.06 : 0.2),
+            radius: themeMode == .light ? 10 : 14,
+            y: 4
+        )
         .accessibilityElement(children: .contain)
+    }
+
+    private func menuSectionLabel(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(.system(size: 11, weight: .semibold, design: .rounded))
+            .foregroundStyle(MenuStoneChrome.taglineSoft(themeMode).opacity(0.72))
+            .tracking(0.6)
+            .accessibilityAddTraits(.isHeader)
     }
 
     private func aiDifficultyPicker(metrics _: MainMenuLayoutMetrics, selected: Font, unselected: Font) -> some View {
@@ -387,14 +484,6 @@ struct MainMenuView: View {
         selectedDuration = allowed[0]
     }
 
-    private func pvaiPrimaryButton(metrics: MainMenuLayoutMetrics) -> some View {
-        modeSelectorButton(title: "PvAI", focus: .pvAI, metrics: metrics)
-    }
-
-    private func pvpTextButton(metrics: MainMenuLayoutMetrics) -> some View {
-        modeSelectorButton(title: "PvP", focus: .pvp, metrics: metrics)
-    }
-
     private func modeSelectorButton(title: String, focus: MainMenuPlayFocus, metrics: MainMenuLayoutMetrics) -> some View {
         Button {
             HapticService.lightImpact()
@@ -406,31 +495,33 @@ struct MainMenuView: View {
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(MenuModeSelectorStyle(isSelected: menuPlayFocus == focus, font: menuModeFont(base: metrics.pvaiBase)))
+        .buttonStyle(MenuModeSelectorStyle(isSelected: menuPlayFocus == focus, font: menuModeFont(base: metrics.auxiliaryBase + 3)))
         .accessibilityAddTraits(menuPlayFocus == focus ? .isSelected : [])
     }
 
     private func startPrimaryButton(metrics: MainMenuLayoutMetrics) -> some View {
-        Button {
+        let t = XOTheme.tokens(for: themeMode)
+        return Button {
             HapticService.mediumImpact()
             launchSelectedMode()
         } label: {
-            Text("Start")
-                .font(.system(size: metrics.pvaiBase, weight: .semibold, design: .rounded))
-                .foregroundStyle(XOTheme.tokens(for: themeMode).primaryButtonLabel)
+            Text("Start Match")
+                .font(.system(size: metrics.pvaiBase * 0.68, weight: .semibold, design: .rounded))
+                .foregroundStyle(t.primaryButtonLabel)
                 .frame(maxWidth: .infinity)
-                .frame(minHeight: 48)
+                .frame(minHeight: 52)
                 .background(
                     RoundedRectangle(cornerRadius: SGRadius.md, style: .continuous)
-                        .fill(XOTheme.tokens(for: themeMode).accent)
+                        .fill(t.accent)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: SGRadius.md, style: .continuous)
-                        .strokeBorder(XOTheme.tokens(for: themeMode).accentSubtle.opacity(themeMode == .light ? 0.45 : 0.5), lineWidth: 1)
+                        .strokeBorder(t.accentSubtle.opacity(themeMode == .light ? 0.5 : 0.55), lineWidth: 1)
                 )
+                .shadow(color: t.accent.opacity(themeMode == .light ? 0.22 : 0.35), radius: 8, y: 3)
         }
         .buttonStyle(MenuStartPressStyle())
-        .accessibilityLabel("Start")
+        .accessibilityLabel("Start Match")
         .accessibilityHint(menuPlayFocus == .pvAI ? "Starts a PvAI match." : "Starts a local PvP match.")
     }
 
@@ -443,30 +534,161 @@ struct MainMenuView: View {
         }
     }
 
-    private func durationTextPicker(metrics: MainMenuLayoutMetrics, timerSelected: Font, timerUnselected: Font) -> some View {
-        HStack(spacing: metrics.timerGroupSpacing) {
-            ForEach(activeMenuDurations, id: \.self) { duration in
-                Button {
-                    selectedDuration = duration
-                } label: {
-                    Text(duration.pickerTitle)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.72)
+    private func timeControlFonts(base: CGFloat) -> (selected: Font, unselected: Font) {
+        let metrics = UIFontMetrics(forTextStyle: .callout)
+        return (
+            .system(size: metrics.scaledValue(for: base + 3), weight: .semibold, design: .rounded),
+            .system(size: metrics.scaledValue(for: base + 1.5), weight: .medium, design: .rounded)
+        )
+    }
+
+    private func timeControlSection(metrics: MainMenuLayoutMetrics) -> some View {
+        let fonts = timeControlFonts(base: metrics.auxiliaryBase)
+        let durations = activeMenuDurations
+        let rows = timeControlPillRows(for: durations)
+
+        return VStack(spacing: SGSpacing.md) {
+            Text("Time Control")
+                .font(.system(size: metrics.auxiliaryBase + 3, weight: .semibold, design: .rounded))
+                .foregroundStyle(MenuStoneChrome.titleInk(themeMode).opacity(0.92))
+                .tracking(0.15)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .accessibilityAddTraits(.isHeader)
+
+            VStack(spacing: SGSpacing.sm) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    HStack(spacing: SGSpacing.sm) {
+                        ForEach(row, id: \.self) { duration in
+                            timeControlPill(
+                                duration,
+                                selectedFont: fonts.selected,
+                                unselectedFont: fonts.unselected
+                            )
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
-                .buttonStyle(
-                    SGEngravedTextButtonStyle(
-                        variant: .timerOption(isSelected: selectedDuration == duration),
-                        timerFontSelected: timerSelected,
-                        timerFontUnselected: timerUnselected,
-                        primaryInk: SGEngravedTextTheme.defaultInk(for: themeMode)
-                    )
-                )
             }
+            .animation(
+                timeControlSelectionAnimation,
+                value: selectedDuration
+            )
         }
         .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(menuPlayFocus == .pvAI ? "PvAI match duration" : "Session duration")
-        .accessibilityValue(selectedDuration.title)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(menuPlayFocus == .pvAI ? "PvAI time control" : "PvP time control")
+        .accessibilityValue(selectedDuration.pickerTitle)
+    }
+
+    private var timeControlSelectionAnimation: Animation? {
+        accessibilityReduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.82)
+    }
+
+    /// Centered rows: four durations on one line; five (PvP) split 3 + 2.
+    private func timeControlPillRows(for durations: [GameDuration]) -> [[GameDuration]] {
+        guard durations.count == 5 else { return [durations] }
+        return [Array(durations.prefix(3)), Array(durations.suffix(2))]
+    }
+
+    private func timeControlPill(
+        _ duration: GameDuration,
+        selectedFont: Font,
+        unselectedFont: Font
+    ) -> some View {
+        let isSelected = selectedDuration == duration
+        return Button {
+            HapticService.lightImpact()
+            selectedDuration = duration
+        } label: {
+            timeControlPillLabel(
+                duration,
+                font: isSelected ? selectedFont : unselectedFont,
+                isSelected: isSelected
+            )
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .padding(.horizontal, duration == .noTime ? SGSpacing.md : SGSpacing.md + 2)
+            .frame(minWidth: duration == .noTime ? 96 : 54)
+            .frame(height: 46)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(
+            MainMenuTimeControlPillStyle(
+                isSelected: isSelected,
+                themeMode: themeMode,
+                reduceMotion: accessibilityReduceMotion
+            )
+        )
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    @ViewBuilder
+    private func timeControlPillLabel(_ duration: GameDuration, font: Font, isSelected: Bool) -> some View {
+        let ink = SGEngravedTextTheme.defaultInk(for: themeMode)
+        let opacity: CGFloat = isSelected ? 0.98 : 0.58
+        if duration == .noTime {
+            HStack(spacing: 4) {
+                Text("∞")
+                    .font(font)
+                Text("No Time")
+                    .font(font)
+            }
+            .foregroundStyle(ink.opacity(opacity))
+        } else {
+            Text(duration.mainMenuChipLabel)
+                .font(font)
+                .foregroundStyle(ink.opacity(opacity))
+        }
+    }
+}
+
+// MARK: - Time control pill
+
+private struct MainMenuTimeControlPillStyle: ButtonStyle {
+    var isSelected: Bool
+    var themeMode: SGThemeMode
+    var reduceMotion: Bool
+
+    private var t: XOTheme.Tokens { XOTheme.tokens(for: themeMode) }
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(pillFill, in: Capsule())
+            .overlay {
+                Capsule()
+                    .strokeBorder(pillBorder, lineWidth: isSelected ? 1.25 : 1)
+            }
+            .shadow(
+                color: isSelected ? t.accent.opacity(themeMode == .light ? 0.2 : 0.32) : .clear,
+                radius: isSelected ? 7 : 0,
+                y: isSelected ? 2.5 : 0
+            )
+            .scaleEffect(selectionScale(isPressed: configuration.isPressed))
+            .animation(pressAnimation, value: configuration.isPressed)
+    }
+
+    private var pillFill: Color {
+        if isSelected {
+            return t.accent.opacity(themeMode == .light ? 0.2 : 0.3)
+        }
+        return t.surface.opacity(themeMode == .light ? 0.5 : 0.28)
+    }
+
+    private var pillBorder: Color {
+        if isSelected {
+            return t.accent.opacity(themeMode == .light ? 0.62 : 0.72)
+        }
+        return t.border.opacity(themeMode == .light ? 0.38 : 0.45)
+    }
+
+    private func selectionScale(isPressed: Bool) -> CGFloat {
+        if isPressed { return 0.97 }
+        if isSelected { return reduceMotion ? 1 : 1.03 }
+        return 1
+    }
+
+    private var pressAnimation: Animation? {
+        reduceMotion ? nil : .easeOut(duration: 0.14)
     }
 }
 

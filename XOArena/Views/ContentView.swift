@@ -14,7 +14,7 @@ struct ContentView: View {
     @State private var selectedDuration: GameDuration = .threeMinutes
     @StateObject private var themeManager = SGThemeManager()
 
-    /// Mirrors **`@AppStorage("showIntro")`** for first-frame routing (see **`ContentView.readInitialShowSplash()`**).
+    /// Launch splash routing (see **`SplashExperienceStorage`**).
     @State private var showSplash: Bool
 
     private var tintColor: Color {
@@ -26,15 +26,13 @@ struct ContentView: View {
     }
 
     private static func readInitialShowSplash() -> Bool {
-        let key = "showIntro"
-        if UserDefaults.standard.object(forKey: key) == nil { return true }
-        return UserDefaults.standard.bool(forKey: key)
+        SplashExperienceStorage.shouldPresentOnLaunch()
     }
 
     var body: some View {
         Group {
             if showSplash {
-                IntroView {
+                SplashExperienceView {
                     showSplash = false
                 }
                 .transition(.opacity)
